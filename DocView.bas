@@ -3,111 +3,130 @@ Option Explicit
 Option Compatible
 Option ClassModule
 
-Const STYLE_QUOT = "Quotations"
-Const STYLE_CODE = "code_"
-Const STYLE_HEAD = "Heading"
+' Constants for document style recognition
+Const STYLE_QUOT = "Quotations"  ' Style name for quotation blocks
+Const STYLE_CODE = "code_"       ' Prefix for code block styles
+Const STYLE_HEAD = "Heading"     ' Prefix for heading styles
 
-Public docTree
-Public viewAdapter
-Public props
+' Public variables for document processing
+Public docTree                   ' Document tree structure containing parsed content
+Public viewAdapter              ' Output format adapter (HFM, HTML, etc.)
+Public props                    ' Properties collection for formatting options
 
+' Process document node based on its style type
+' @param node: Document node with style information
+' @return: Formatted content based on style type
 Function PrintNodeStyle(ByRef node)
-    Dim s As String : s = ""
+    Dim s As String : s = ""  ' Result string
+    ' Handle different style types
     If node.name_ = STYLE_QUOT Then
-        s = viewAdapter.Quote(node)
+        s = viewAdapter.Quote(node)  ' Format as blockquote
     ElseIf Left(node.name_, 5) = STYLE_CODE Then
-        s = viewAdapter.Code(node)
+        s = viewAdapter.Code(node)   ' Format as code block
     ElseIf Left(node.name_, 7) = STYLE_HEAD Then
+        ' Process heading with potential bookmarks
         Dim textPortion, enumPortion
         enumPortion = node.children(1).value.createEnumeration()
         Do While enumPortion.hasMoreElements()
             textPortion = enumPortion.nextElement()
             If textPortion.TextPortionType = "Text" Then
-                s = s & viewAdapter.Head(node)
+                s = s & viewAdapter.Head(node)     ' Add heading text
             ElseIf textPortion.TextPortionType = "Bookmark" Then
-                s = s & viewAdapter.Anchor(textPortion)
+                s = s & viewAdapter.Anchor(textPortion)  ' Add bookmark anchor
             End If
         Loop
     Else
-        s = viewAdapter.ParaStyle(node)
+        s = viewAdapter.ParaStyle(node)  ' Default paragraph style
     End If
     PrintNodeStyle = s
 End Function
 
+' Process LibreOffice paragraph object and extract all content
+' @param oPara: LibreOffice paragraph object
+' @param level: Nesting level for formatting
+' @param lineNum: Optional line number for code blocks
+' @return: Formatted paragraph content
 Function PrintNodeParaLO(ByRef oPara, level As Long, Optional lineNum As Integer)
+    ' LibreOffice service type constants
     Dim textGraphObj$ : textGraphObj$ = "com.sun.star.text.TextGraphicObject"
     Dim drawShape$ : drawShape$ = "com.sun.star.drawing.Shape"
     Dim textEmbObj$ : textEmbObj$ = "com.sun.star.text.TextEmbeddedObject"
-    ' Graphics are anchored to a paragraph are enumerate as TextContent
+    
+    ' Process graphics anchored to paragraph (enumerate as TextContent)
     Dim contEnum : contEnum = _
         oPara.createContentEnumeration("com.sun.star.text.TextContent")
-    Dim curContent, s As String : s = ""
+    Dim curContent, s As String : s = ""  ' Current content and result string
     
+    ' Add line number prefix for code blocks
     If Not IsMissing (lineNum) AND lineNum > 0 Then s = s & Format_Num(lineNum) & " "
     
+    ' Process paragraph-anchored content
     Do While contEnum.hasMoreElements()
         curContent = contEnum.nextElement()           
         If curContent.supportsService(textGraphObj$) Then
-            ' Image anchored to a paragraph
-            s = s & viewAdapter.Image(curContent)
+            s = s & viewAdapter.Image(curContent)  ' Process paragraph-anchored images
         ElseIf curContent.supportsService(drawShape$) Then
-            ' Drawing shape anchored to a paragraph
+            ' Drawing shapes anchored to paragraph (currently not processed)
         End If
     Loop
     
-    ' Graphics are anchored a character, or as a character into paragraph
-    ' are enumerate as TextPortionType will process when parse paragraph
+    ' Process character-anchored graphics and inline content
+    ' These are enumerated as TextPortionType within the paragraph
     Dim textPortion, enumPortion : enumPortion = oPara.createEnumeration()
+    ' Process each text portion in the paragraph
     Do While enumPortion.hasMoreElements()
         textPortion = enumPortion.nextElement()
         If textPortion.TextPortionType = "Text" Then
-            ' Simply text object is here
+            ' Process text with formatting and hyperlinks
             If Not IsEmpty(textPortion.HyperLinkURL) And _
                 textPortion.HyperLinkURL <> "" Then
-			    s = s & viewAdapter.Link(textPortion)
+			    s = s & viewAdapter.Link(textPortion)  ' Format as hyperlink
       	    ElseIf textPortion.CharWeight = com.sun.star.awt.FontWeight.BOLD Then
-			    s = s & viewAdapter.FontDecorate(textPortion, "Bold")
+			    s = s & viewAdapter.FontDecorate(textPortion, "Bold")  ' Bold formatting
       	    ElseIf textPortion.CharPosture = com.sun.star.awt.FontSlant.ITALIC Then
-			    s = s & viewAdapter.FontDecorate(textPortion, "Italic")
+			    s = s & viewAdapter.FontDecorate(textPortion, "Italic")  ' Italic formatting
       	    ElseIf textPortion.CharUnderline = com.sun.star.awt.FontUnderline.SINGLE Then
-			    s = s & viewAdapter.FontDecorate(textPortion, "Underline")
+			    s = s & viewAdapter.FontDecorate(textPortion, "Underline")  ' Underline formatting
       	    ElseIf textPortion.CharStrikeout = com.sun.star.awt.FontStrikeout.SINGLE Then
-			    s = s & viewAdapter.FontDecorate(textPortion, "Strikeout")
+			    s = s & viewAdapter.FontDecorate(textPortion, "Strikeout")  ' Strikethrough formatting
             Else
-			    s = s & textPortion.String
+			    s = s & textPortion.String  ' Plain text
 			End If
         ElseIf textPortion.TextPortionType = "Frame" Then
-            ' Check inline textGraphic & drawing.Shape
+            ' Process inline frames (images, shapes, formulas)
             Dim framePortion, enumFrame
             enumFrame = textPortion.createContentEnumeration(textGraphObj$)
             Do While enumFrame.hasMoreElements()
                 framePortion = enumFrame.nextElement()
                 If framePortion.supportsService(textGraphObj$) Then
-                    ' inline IMG is here
-                    s = s & viewAdapter.InlineImage(framePortion)
+                    s = s & viewAdapter.InlineImage(framePortion)  ' Inline images
                 ElseIf framePortion.supportsService(drawShape$) Then
-                    ' inline Shape here
+                    ' Inline drawing shapes (currently not processed)
                 ElseIf framePortion.supportsService(textEmbObj$) And _
                     framePortion.FrameStyleName = "Formula" Then
-                    ' inline Formula here
-                    s = s & viewAdapter.Formula(framePortion.Component.Formula)
+                    s = s & viewAdapter.Formula(framePortion.Component.Formula)  ' Math formulas
                 End If
             Loop
         ElseIf textPortion.TextPortionType = "Bookmark" Then
-            s = s & viewAdapter.Anchor(textPortion)
+            s = s & viewAdapter.Anchor(textPortion)  ' Process bookmarks as anchors
         End If
     Loop
+    ' Apply final formatting based on paragraph type
     If oPara.NumberingIsNumber Then
-        PrintNodeParaLO = viewAdapter.FormatList(oPara, s, level)
+        PrintNodeParaLO = viewAdapter.FormatList(oPara, s, level)  ' Format as list item
     ElseIf Not IsMissing (lineNum) AND lineNum = 0 Then
-        PrintNodeParaLO = viewAdapter.FormatPara(s, level, 0)       
+        PrintNodeParaLO = viewAdapter.FormatPara(s, level, 0)  ' Code block without extra line break
     ElseIf Not IsMissing (lineNum) AND lineNum > 0 Then
-        PrintNodeParaLO = s & CHR$(10)
+        PrintNodeParaLO = s & CHR$(10)  ' Code line with line break
     Else
-        PrintNodeParaLO = viewAdapter.FormatPara(s, level, 1)
+        PrintNodeParaLO = viewAdapter.FormatPara(s, level, 1)  ' Regular paragraph with line break
     End If
 End Function
 
+' Process paragraph node wrapper
+' @param nodePara: Document paragraph node
+' @param lineNum: Optional line number for code blocks
+' @return: Formatted paragraph content
 Function PrintNodePara(ByRef nodePara, Optional lineNum As Integer)
     If IsMissing (lineNum) Then
         PrintNodePara = PrintNodeParaLO(nodePara.value, nodePara.level)
@@ -116,36 +135,53 @@ Function PrintNodePara(ByRef nodePara, Optional lineNum As Integer)
     PrintNodePara = PrintNodeParaLO(nodePara.value, nodePara.level, lineNum)
 End Function
 
+' Process table node and format as markdown table
+' @param nodeTable: Document table node
+' @return: Formatted markdown table
 Function PrintNodeTable(ByRef nodeTable)
+    ' Variables for table processing
     Dim oTable, oCell, oText, oEnum, oPar, t, r, c
     Dim nRow As Long, nCol As Long, Rows As Long, Colls As Long
-    oTable = nodeTable.value : t = ""
-    Rows = oTable.getRows().getCount() - 1
-    Colls = oTable.getColumns().getCount() - 1
+    
+    oTable = nodeTable.value : t = ""  ' Get LibreOffice table object
+    Rows = oTable.getRows().getCount() - 1     ' Get row count (0-based)
+    Colls = oTable.getColumns().getCount() - 1 ' Get column count (0-based)
+    
+    ' Process each row
     For nRow = 0 To Rows
-        r = ""
+        r = ""  ' Row content string
+        ' Process each cell in the row
         For nCol = 0 To Colls
-            oCell = oTable.getCellByPosition(nCol, nRow)
-            oText = oCell.getText()
-            c = ""
+            oCell = oTable.getCellByPosition(nCol, nRow)  ' Get cell object
+            oText = oCell.getText()  ' Get cell text object
+            c = ""  ' Cell content string
+            
+            ' Process all paragraphs in the cell
             oEnum = oText.createEnumeration()
             Do While oEnum.hasMoreElements()
                 oPar = oEnum.nextElement()
                 If oPar.supportsService("com.sun.star.text.Paragraph") Then
-                    c = c & PrintNodeParaLO(oPar, nodeTable.level + 3, 0)
+                    c = c & PrintNodeParaLO(oPar, nodeTable.level + 3, 0)  ' Process cell paragraph
                 End If
             Loop
-            r = r & viewAdapter.FormatCell(c, nodeTable.level + 2, nCol, nRow)
+            r = r & viewAdapter.FormatCell(c, nodeTable.level + 2, nCol, nRow)  ' Format cell
         Next
-        t = t & viewAdapter.FormatRow(r, nodeTable.level + 1, nRow, Colls)
+        t = t & viewAdapter.FormatRow(r, nodeTable.level + 1, nRow, Colls)  ' Format row
     Next
-    PrintNodeTable = viewAdapter.FormatTable(t, nodeTable.level)
+    PrintNodeTable = viewAdapter.FormatTable(t, nodeTable.level)  ' Format complete table
 End Function
 
 Function PrintTree(ByRef node, Optional ByRef props As Collection)
     Dim child, lineNum : lineNum = 0
     Dim s : s = ""
-    If Not IsMissing(props) And props("CodeLineNum") Then lineNum = 1
+    ' Fix for newer LibreOffice versions - check if props is provided and not Nothing
+    If Not IsMissing(props) Then
+        If Not props Is Nothing Then
+            On Error Resume Next
+            If props("CodeLineNum") Then lineNum = 1
+            On Error GoTo 0
+        End If
+    End If
     For Each child In node.children
         If child.type_ = NodeType.Section Then
             s = s & viewAdapter.Section(child)
@@ -167,6 +203,8 @@ Function PrintTree(ByRef node, Optional ByRef props As Collection)
     PrintTree = s
 End Function
 
+' Generate the complete formatted output from document tree
+' @return: Complete formatted document content
 Public Function MakeView() As String
     MakeView = PrintTree(docTree)
 End Function

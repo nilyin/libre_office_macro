@@ -1,29 +1,33 @@
 ﻿REM Author: Dmitry A. Borisov, ddaabb@mail.ru (CC BY 4.0)
 Option VBASupport 1
 
-Const STYLE_HEAD = "Heading"
-Const CODE_LINE_NUM = True
+' Constants for document processing
+Const STYLE_HEAD = "Heading"  ' Prefix for heading paragraph styles
+Const CODE_LINE_NUM = True    ' Enable line numbering in code blocks
 
+' Enumeration for different types of document nodes
 Enum NodeType
-    Section = 1
-    Style = 2
-    List = 3
-    Table = 4
-    Paragraph = 5
+    Section = 1    ' Document sections
+    Style = 2      ' Paragraph styles
+    List = 3       ' List structures
+    Table = 4      ' Table structures
+    Paragraph = 5  ' Individual paragraphs
 End Enum
 
-Type Node ' node tree
-    type_ As NodeType
-    value As Variant ' NodeType: Paragraph = 3, Table = 4, Image = 5. LibreOffice Object
-    name_ As String ' NodeType: Section = 1,	Style = 2
-    children As Variant ' NodeType: Section = 1, Style = 2
-    level As Integer ' NodeType: All
+' Structure representing a node in the document tree
+Type Node
+    type_ As NodeType     ' Type of node (Section, Style, List, Table, Paragraph)
+    value As Variant      ' LibreOffice object for Paragraph and Table nodes
+    name_ As String       ' Name identifier for Section and Style nodes
+    children As Variant   ' Collection of child nodes for Section and Style nodes
+    level As Integer      ' Nesting level in document hierarchy
 End Type
 
+' Enumeration for section processing states
 Enum SectionState
-    End_ = 1
-    New_ = 2
-    Continue = 3
+    End_ = 1       ' End current section
+    New_ = 2       ' Start new section
+    Continue = 3   ' Continue current section
 End Enum
 
 Function SectionTest(ByRef curNode, ByRef curPara, ByRef sectionNames) As SectionState
