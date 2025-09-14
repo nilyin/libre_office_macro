@@ -5,9 +5,11 @@ Option Explicit
 ' @param lineNum: Line number to format
 ' @param Size: Optional width for padding (default: 4)
 ' @return: Formatted line number string with right padding
-Function Format_Num(ByVal lineNum As Integer, Optional Size As Integer) As String
+Function Format_Num(ByVal lineNum As Integer, Optional Size As Variant) As String
     Dim sz As Integer : sz = 4  ' Default width
-    If Not IsMissing(Size) Then sz = Size
+    If Not IsMissing(Size) Then
+        If IsNumeric(Size) Then sz = CInt(Size)
+    End If
     Dim s As String : s = "" + lineNum  ' Convert number to string
     s = s + String(sz - Len(s), " ")     ' Add right padding with spaces
     Format_Num = s

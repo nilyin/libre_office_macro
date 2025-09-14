@@ -175,7 +175,8 @@ continue:
     Loop
 End Sub
 
-Sub ExportToFile (ByRef text_ As String, Comp As Object, Optional suffix = "_export.txt")
+Sub ExportToFile (ByRef text_ As String, Comp As Object, Optional suffix As Variant)
+    If IsMissing(suffix) Then suffix = "_export.txt"
     Dim FileNo As Integer, Filename As String
     Filename = convertToURL(replace(convertFromURL(Comp.URL), ".odt", suffix))
 	FileNo = Freefile
@@ -202,9 +203,11 @@ Function MakeModel(ByRef Comp As Object) As Node
     MakeModel = docTree
 End Function
 
-Sub MakeDocHtmlView(Optional Comp As Object)
+Sub MakeDocHtmlView(Optional Comp As Variant)
     Dim doc As Object : doc = ThisComponent
-    If Comp Then doc = Comp
+    If Not IsMissing(Comp) Then
+        If Not IsEmpty(Comp) Then doc = Comp
+    End If
 
     Dim dView As New DocView : dView = New DocView
     Dim vHtml As New ViewHtml : vHtml = New ViewHtml
@@ -218,9 +221,11 @@ Sub MakeDocHtmlView(Optional Comp As Object)
     ExportToFile dView.MakeView(), doc, "_export.html"
 End Sub
 
-Sub MakeDocHfmView(Optional Comp As Object)
+Sub MakeDocHfmView(Optional Comp As Variant)
     Dim doc As Object : doc = ThisComponent
-    If Comp Then doc = Comp
+    If Not IsMissing(Comp) Then
+        If Not IsEmpty(Comp) Then doc = Comp
+    End If
 
     Dim dView As New DocView : dView = New DocView
     Dim vHfm As New ViewHfm : vHfm = New ViewHfm
@@ -235,7 +240,12 @@ Sub MakeDocHfmView(Optional Comp As Object)
 End Sub
 
 ' "C:\Program Files\LibreOffice\program\soffice.exe" --invisible --nofirststartwizard --headless --norestore macro:///DocExport.DocModel.ExportDir("D:\cpp\habr\002-hfm",0)
-Sub ExportDir(Folder As String, Optional Hfm As Boolean = True)  
+Sub ExportDir(Folder As String, Optional Hfm As Variant)
+    Dim useHfm As Boolean : useHfm = True
+    If Not IsMissing(Hfm) Then
+        If IsNumeric(Hfm) Then useHfm = CBool(Hfm)
+        If VarType(Hfm) = vbBoolean Then useHfm = Hfm
+    End If  
     Dim Props(0) as New com.sun.star.beans.PropertyValue
     Props(0).NAME = "Hidden" 
     Props(0).Value = True 
@@ -244,7 +254,7 @@ Sub ExportDir(Folder As String, Optional Hfm As Boolean = True)
     Do
         url = ConvertToUrl(Folder + "\" + fname)
         Comp = StarDesktop.loadComponentFromURL(url, "_blank", 0, Props)
-        If Hfm Then
+        If useHfm Then
             MakeDocHfmView Comp
         Else
             MakeDocHtmlView Comp

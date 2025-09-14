@@ -46,7 +46,7 @@ End Function
 ' @param level: Nesting level for formatting
 ' @param lineNum: Optional line number for code blocks
 ' @return: Formatted paragraph content
-Function PrintNodeParaLO(ByRef oPara, level As Long, Optional lineNum As Integer)
+Function PrintNodeParaLO(ByRef oPara, level As Long, Optional lineNum As Variant)
     ' LibreOffice service type constants
     Dim textGraphObj$ : textGraphObj$ = "com.sun.star.text.TextGraphicObject"
     Dim drawShape$ : drawShape$ = "com.sun.star.drawing.Shape"
@@ -57,8 +57,12 @@ Function PrintNodeParaLO(ByRef oPara, level As Long, Optional lineNum As Integer
         oPara.createContentEnumeration("com.sun.star.text.TextContent")
     Dim curContent, s As String : s = ""  ' Current content and result string
     
-    ' Add line number prefix for code blocks
-    If Not IsMissing (lineNum) AND lineNum > 0 Then s = s & Format_Num(lineNum) & " "
+    ' Add line number prefix for code blocks - fix for newer LibreOffice versions
+    If Not IsMissing(lineNum) Then
+        If IsNumeric(lineNum) And lineNum > 0 Then
+            s = s & Format_Num(CInt(lineNum)) & " "
+        End If
+    End If
     
     ' Process paragraph-anchored content
     Do While contEnum.hasMoreElements()
@@ -114,10 +118,18 @@ Function PrintNodeParaLO(ByRef oPara, level As Long, Optional lineNum As Integer
     ' Apply final formatting based on paragraph type
     If oPara.NumberingIsNumber Then
         PrintNodeParaLO = viewAdapter.FormatList(oPara, s, level)  ' Format as list item
-    ElseIf Not IsMissing (lineNum) AND lineNum = 0 Then
-        PrintNodeParaLO = viewAdapter.FormatPara(s, level, 0)  ' Code block without extra line break
-    ElseIf Not IsMissing (lineNum) AND lineNum > 0 Then
-        PrintNodeParaLO = s & CHR$(10)  ' Code line with line break
+    ElseIf Not IsMissing(lineNum) Then
+        If IsNumeric(lineNum) Then
+            If CInt(lineNum) = 0 Then
+                PrintNodeParaLO = viewAdapter.FormatPara(s, level, 0)  ' Code block without extra line break
+            ElseIf CInt(lineNum) > 0 Then
+                PrintNodeParaLO = s & CHR$(10)  ' Code line with line break
+            Else
+                PrintNodeParaLO = viewAdapter.FormatPara(s, level, 1)  ' Regular paragraph with line break
+            End If
+        Else
+            PrintNodeParaLO = viewAdapter.FormatPara(s, level, 1)  ' Regular paragraph with line break
+        End If
     Else
         PrintNodeParaLO = viewAdapter.FormatPara(s, level, 1)  ' Regular paragraph with line break
     End If
@@ -127,8 +139,8 @@ End Function
 ' @param nodePara: Document paragraph node
 ' @param lineNum: Optional line number for code blocks
 ' @return: Formatted paragraph content
-Function PrintNodePara(ByRef nodePara, Optional lineNum As Integer)
-    If IsMissing (lineNum) Then
+Function PrintNodePara(ByRef nodePara, Optional lineNum As Variant)
+    If IsMissing(lineNum) Then
         PrintNodePara = PrintNodeParaLO(nodePara.value, nodePara.level)
         Exit Function
     End If
@@ -174,14 +186,14 @@ End Function
 Function PrintTree(ByRef node, Optional ByRef props As Collection)
     Dim child, lineNum : lineNum = 0
     Dim s : s = ""
-    ' Fix for newer LibreOffice versions - check if props is provided and not Nothing
+    ' Fix for newer LibreOffice versions - safe Collection parameter checking
+    On Error Resume Next
     If Not IsMissing(props) Then
-        If Not props Is Nothing Then
-            On Error Resume Next
+        If TypeName(props) = "Collection" Then
             If props("CodeLineNum") Then lineNum = 1
-            On Error GoTo 0
         End If
     End If
+    On Error GoTo 0
     For Each child In node.children
         If child.type_ = NodeType.Section Then
             s = s & viewAdapter.Section(child)
