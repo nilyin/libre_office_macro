@@ -218,7 +218,7 @@ Sub MakeDocHtmlView(Optional Comp As Variant)
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
     End With
-    ExportToFile dView.MakeView(), doc, "_export.html"
+    ExportToFile dView.MakeView(), doc, ".html"
 End Sub
 
 Sub MakeDocHfmView(Optional Comp As Variant)
@@ -236,7 +236,7 @@ Sub MakeDocHfmView(Optional Comp As Variant)
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
     End With
-    ExportToFile dView.MakeView(), doc, "_export_hfm.txt"
+    ExportToFile dView.MakeView(), doc, "_hfm.md"
 End Sub
 
 ' "C:\Program Files\LibreOffice\program\soffice.exe" --invisible --nofirststartwizard --headless --norestore macro:///DocExport.DocModel.ExportDir("D:\cpp\habr\002-hfm",0)

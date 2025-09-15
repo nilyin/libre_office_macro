@@ -25,8 +25,10 @@ End Sub
 ' @return: Formatted markdown heading string
 Function Head(ByRef node)
     Dim i : i = Split(node.name_, " ")(1)  ' Extract heading level from node name
-    Head = CHR$(10) & String(i, "#") & " " & _
-        node.children(1).value.String & CHR$(10)
+    Dim headingText As String : headingText = node.children(1).value.String
+    
+    ' Create simple markdown heading (GitHub will auto-generate anchors)
+    Head = CHR$(10) & String(i, "#") & " " & headingText & CHR$(10)
 End Function
 
 ' Generate markdown blockquote from document node
@@ -88,18 +90,49 @@ End Function
 ' @return: Formatted markdown link string
 Function Link(ByRef node)
     Dim t As String : t = node.String  ' Extract link text
+    Dim url As String : url = node.HyperLinkURL
+    
     ' Remove trailing characters for heading styles
     If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
         t = Left(t, Len(t) - 2)
     End If
-    Link = "[" & t & "](" & node.HyperLinkURL & ")"
+    
+    ' Convert LibreOffice internal references to GitHub-style markdown anchors
+    If InStr(url, "#") > 0 Then
+        Dim anchor As String : anchor = Mid(url, InStr(url, "#") + 1)
+        ' Clean up LibreOffice anchor names for GitHub markdown
+        If InStr(anchor, "__RefHeading") > 0 Then
+            ' Convert to GitHub-style anchor based on text content
+            ' GitHub converts: "2.1. Ссылки" -> "21-ссылки"
+            anchor = LCase(t)
+            anchor = Replace(anchor, ".", "")
+            anchor = Replace(anchor, " ", "-")
+            anchor = Replace(anchor, ",", "")
+            anchor = Replace(anchor, "(", "")
+            anchor = Replace(anchor, ")", "")
+        End If
+        Link = "[" & t & "](#" & anchor & ")"
+    Else
+        Link = "[" & t & "](" & url & ")"
+    End If
 End Function
 
 ' Generate HTML anchor tag from LibreOffice bookmark object
 ' @param lo: LibreOffice bookmark object
 ' @return: HTML anchor tag or empty string
 Function Anchor(ByRef lo)
-    Anchor = IIf(lo.IsStart, "<anchor>" & lo.Bookmark.Name & "</anchor>", "")
+    If lo.IsStart Then
+        Dim anchorName As String : anchorName = lo.Bookmark.Name
+        ' Clean up LibreOffice bookmark names for markdown
+        If InStr(anchorName, "__RefHeading") > 0 Then
+            ' Skip LibreOffice internal bookmarks - they'll be handled by headings
+            Anchor = ""
+        Else
+            Anchor = "<a id=""" & anchorName & """></a>"
+        End If
+    Else
+        Anchor = ""
+    End If
 End Function
 
 ' Apply font decoration (bold, italic, etc.) to text node
@@ -157,7 +190,9 @@ End Function
 Function FormatList(ByRef list, ByRef txt, level As Long)
     Dim shift As String : shift = String(list.NumberingLevel * SHIFT_CNT, " ")  ' Calculate indentation
     Dim lbl As String : lbl = list.ListLabelString  ' Get list marker (number or bullet)
-    FormatList = shift & IIf(lbl = "", "-", lbl) & " " & txt & CHR$(10)
+    ' Clean up text and ensure proper line breaks
+    Dim cleanTxt As String : cleanTxt = Trim(txt)
+    FormatList = shift & IIf(lbl = "", "-", lbl) & " " & cleanTxt & CHR$(10)
 End Function
 
 ' Format paragraph with optional extra line break
@@ -166,7 +201,8 @@ End Function
 ' @param extra: Flag to add extra line break (0 = no, other = yes)
 ' @return: Formatted paragraph text
 Function FormatPara(ByRef txt, level As Long, extra As Long)
-    FormatPara = txt & IIf(extra = 0, "", CHR$(10))
+    ' Ensure proper line breaks for markdown formatting
+    FormatPara = txt & CHR$(10)
 End Function
 
 ' Convert LibreOffice formula to LaTeX format for markdown
