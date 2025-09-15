@@ -91,6 +91,7 @@ End Function
 Function Link(ByRef node)
     Dim t As String : t = node.String  ' Extract link text
     Dim url As String : url = node.HyperLinkURL
+    Dim linkResult As String
     
     ' Remove trailing characters for heading styles
     If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
@@ -111,9 +112,19 @@ Function Link(ByRef node)
             anchor = Replace(anchor, "(", "")
             anchor = Replace(anchor, ")", "")
         End If
-        Link = "[" & t & "](#" & anchor & ")"
+        linkResult = "[" & t & "](#" & anchor & ")"
     Else
-        Link = "[" & t & "](" & url & ")"
+        linkResult = "[" & t & "](" & url & ")"
+    End If
+    
+    ' Format Table of Contents links as list items
+    If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
+        ' Count dots to determine nesting level
+        Dim dotCount As Long : dotCount = Len(t) - Len(Replace(t, ".", ""))
+        Dim indent As String : indent = String((dotCount - 1) * 2, " ")
+        Link = indent & "- " & linkResult & CHR$(10)
+    Else
+        Link = linkResult
     End If
 End Function
 
@@ -258,8 +269,20 @@ Function Section(ByRef nodeSec)
         Exit Function
     End If
 
-    ' Wrap other sections in spoiler tags for HFM
-    Section = "<spoiler title=""" & _
-        secTitle & """>" & CHR$(10) & CHR$(10) & _
-        docView.PrintTree(nodeSec) & "</spoiler>" & CHR$(10)
+    ' Check if this is Table of Contents section
+    Dim lowerTitle As String : lowerTitle = LCase(secTitle)
+    If InStr(lowerTitle, "оглавление") > 0 Or InStr(lowerTitle, "содержание") > 0 Or _
+       InStr(lowerTitle, "индекс") > 0 Or InStr(lowerTitle, "список глав") > 0 Or _
+       InStr(lowerTitle, "указатель") > 0 Or InStr(lowerTitle, "каталог") > 0 Or _
+       InStr(lowerTitle, "реестр") > 0 Or InStr(lowerTitle, "contents") > 0 Or _
+       InStr(lowerTitle, "index") > 0 Or InStr(lowerTitle, "table of contents") > 0 Or _
+       InStr(lowerTitle, "reference") > 0 Then
+        ' Use regular heading for TOC
+        Section = "## " & secTitle & CHR$(10) & CHR$(10) & docView.PrintTree(nodeSec)
+    Else
+        ' Wrap other sections in spoiler tags for HFM
+        Section = "<spoiler title=""" & _
+            secTitle & """>" & CHR$(10) & CHR$(10) & _
+            docView.PrintTree(nodeSec) & "</spoiler>" & CHR$(10)
+    End If
 End Function
