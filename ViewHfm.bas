@@ -151,7 +151,14 @@ End Function
 ' @param idxRow: Row index (unused)
 ' @return: Formatted cell content with pipe separator
 Function FormatCell(ByRef txt, level As Long, index As Long, idxRow As Long)
-    FormatCell = IIf(index = 0, txt, "|" & txt)
+    ' Clean up cell content: remove line breaks and trim whitespace
+    Dim cleanTxt As String
+    cleanTxt = Replace(txt, CHR$(10), " ")
+    cleanTxt = Replace(cleanTxt, CHR$(13), " ")
+    cleanTxt = Trim(cleanTxt)
+    
+    ' Always add pipe separator before cell content
+    FormatCell = "|" & cleanTxt
 End Function
 
 ' Format table row for markdown table with header separator
@@ -162,7 +169,7 @@ End Function
 ' @return: Formatted markdown table row with separator after header
 Function FormatRow(ByRef txt, level As Long, index As Long, Colls As Long)
     Dim i AS Long, r As String : r = ""  ' Loop counter and result string
-    r = "|" & txt & "|" & CHR$(10)
+    r = txt & "|" & CHR$(10)
     ' Add markdown table header separator after first row
     If index = 0 Then
         r = r & "|"
