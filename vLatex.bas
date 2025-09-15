@@ -18,7 +18,7 @@ Private Sub Class_Initialize()
         .Add("_", "from")
         .Add("^", "to")
         .Add("\ " & CHR$(10), "newline")
-        .Add("& ", "#")
+        .Add("&", "#")
         .Add("\\ ", "##")
     End With
     With extraChar

@@ -184,6 +184,118 @@ Sub ExportToFile (ByRef text_ As String, Comp As Object, Optional suffix As Vari
 	Print #FileNo, text_
 End Sub
 
+Function ProcessHeader(ByRef Comp As Object) As String
+    Dim headerContent As String : headerContent = ""
+    On Error Resume Next
+    
+    ' Try to get the current page style from the document
+    Dim cursor : cursor = Comp.getText().createTextCursor()
+    Dim pageStyleName As String : pageStyleName = cursor.PageStyleName
+    
+    ' Get page styles collection
+    Dim pageStyles : pageStyles = Comp.getStyleFamilies().getByName("PageStyles")
+    Dim currentPageStyle : currentPageStyle = pageStyles.getByName(pageStyleName)
+    
+    ' Process header if it exists
+    If currentPageStyle.HeaderIsOn Then
+        Dim headerText : headerText = currentPageStyle.HeaderText
+        If Not IsEmpty(headerText) Then
+            Dim headerEnum : headerEnum = headerText.createEnumeration()
+            Do While headerEnum.hasMoreElements()
+                Dim headerElement : headerElement = headerEnum.nextElement()
+                If headerElement.supportsService("com.sun.star.text.Paragraph") Then
+                    ' Process text portions first to catch Frame type images
+                    Dim textEnum : textEnum = headerElement.createEnumeration()
+                    Do While textEnum.hasMoreElements()
+                        Dim textPortion : textPortion = textEnum.nextElement()
+                        If textPortion.TextPortionType = "Text" Then
+                            headerContent = headerContent & textPortion.String
+                        ElseIf textPortion.TextPortionType = "Frame" Then
+                            ' Process inline frames (images)
+                            Dim frameEnum : frameEnum = textPortion.createContentEnumeration("com.sun.star.text.TextGraphicObject")
+                            Do While frameEnum.hasMoreElements()
+                                Dim imageObj : imageObj = frameEnum.nextElement()
+                                If imageObj.supportsService("com.sun.star.text.TextGraphicObject") Then
+                                    headerContent = headerContent & ProcessHeaderImage(imageObj, Comp.URL)
+                                End If
+                            Loop
+                        End If
+                    Loop
+                    
+                    ' Also check for paragraph-anchored content
+                    Dim contentEnum : contentEnum = headerElement.createContentEnumeration("com.sun.star.text.TextContent")
+                    Do While contentEnum.hasMoreElements()
+                        Dim content : content = contentEnum.nextElement()
+                        If content.supportsService("com.sun.star.text.TextGraphicObject") Then
+                            headerContent = headerContent & ProcessHeaderImage(content, Comp.URL)
+                        End If
+                    Loop
+                    
+                    headerContent = headerContent & CHR$(10)
+                End If
+            Loop
+            If headerContent <> "" Then headerContent = headerContent & CHR$(10)
+        End If
+    End If
+    
+    On Error GoTo 0
+    ProcessHeader = headerContent
+End Function
+
+Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As String, ByRef fileName As String) As Boolean
+    On Error Resume Next
+    Dim fso : fso = CreateObject("Scripting.FileSystemObject")
+    Dim sourcePath As String : sourcePath = ConvertFromURL(sourceURL)
+    Dim imgDir As String : imgDir = targetDir & "img"
+    Dim targetPath As String : targetPath = imgDir & "\" & fileName
+    
+    ' Create img directory if it doesn't exist
+    If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
+    
+    ' Copy file if source exists
+    If fso.FileExists(sourcePath) Then
+        fso.CopyFile sourcePath, targetPath, True
+        CopyImageFile = (Err.Number = 0)
+    Else
+        CopyImageFile = False
+    End If
+    On Error GoTo 0
+End Function
+
+Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
+    Dim altText As String : altText = IIf(imageObj.Title = "", "image", imageObj.Title)
+    Dim imageName As String
+    On Error Resume Next
+    imageName = imageObj.Graphic.OriginURL
+    If imageName = "" Then imageName = imageObj.GraphicURL
+    On Error GoTo 0
+    
+    If imageName <> "" Then
+        ' Check if it's a remote URL
+        If Left(LCase(imageName), 4) = "http" Then
+            ProcessImage = "![" & altText & "](" & imageName & ")"
+        Else
+            ' Extract and copy embedded image
+            Dim fileName As String : fileName = Mid(imageName, InStrRev(imageName, "/") + 1)
+            fileName = LCase(fileName)
+            fileName = Replace(fileName, "(", "-")
+            fileName = Replace(fileName, ")", "")
+            fileName = Replace(fileName, " ", "-")
+            
+            Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\"))
+            CopyImageFile imageName, docDir, fileName
+            ProcessImage = "![" & altText & "](./img/" & fileName & ")"
+        End If
+    Else
+        ProcessImage = "![" & altText & "](./img/missing-image.png)"
+    End If
+End Function
+
+Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
+    Dim altText As String : altText = IIf(imageObj.Title = "", "logo", imageObj.Title)
+    ProcessHeaderImage = ProcessImage(imageObj, docURL) & CHR$(10) & CHR$(10)
+End Function
+
 Function MakeModel(ByRef Comp As Object) As Node
     Dim sectionNames As New Collection
     Dim docTree As Node
@@ -218,7 +330,10 @@ Sub MakeDocHtmlView(Optional Comp As Variant)
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
     End With
-    ExportToFile dView.MakeView(), doc, ".html"
+    ' Process header and prepend to content
+    Dim headerContent As String : headerContent = ProcessHeader(doc)
+    Dim fullContent As String : fullContent = headerContent & dView.MakeView()
+    ExportToFile fullContent, doc, ".html"
 End Sub
 
 Sub MakeDocHfmView(Optional Comp As Variant)
@@ -236,7 +351,10 @@ Sub MakeDocHfmView(Optional Comp As Variant)
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
     End With
-    ExportToFile dView.MakeView(), doc, "_hfm.md"
+    ' Process header and prepend to content
+    Dim headerContent As String : headerContent = ProcessHeader(doc)
+    Dim fullContent As String : fullContent = headerContent & dView.MakeView()
+    ExportToFile fullContent, doc, "_hfm.md"
 End Sub
 
 ' "C:\Program Files\LibreOffice\program\soffice.exe" --invisible --nofirststartwizard --headless --norestore macro:///DocExport.DocModel.ExportDir("D:\cpp\habr\002-hfm",0)

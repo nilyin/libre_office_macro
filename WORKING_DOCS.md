@@ -255,3 +255,123 @@ The system maintains document element order through:
 2. Ordered insertion into Collection objects (`children.Add(node)`)
 3. Sequential iteration in PrintTree (`For Each child In node.children`)
 4. Concatenated string output preserving original document flow
+
+## Image Processing System
+
+### Overview
+The image processing system handles both remote URLs and embedded images, automatically extracting and copying embedded images to the `./img/` folder for proper markdown rendering.
+
+### Image Processing Logic
+
+#### 1. Image Type Detection
+```basic
+Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
+    ' Check if image is remote URL (http/https) or embedded
+    If Left(LCase(imageName), 4) = "http" Then
+        ' Use remote URL directly
+        ProcessImage = "![" & altText & "](" & imageName & ")"
+    Else
+        ' Process embedded image - extract and copy
+        ' Apply filename cleaning and copy to ./img/ folder
+        ProcessImage = "![" & altText & "](./img/" & fileName & ")"
+    End If
+End Function
+```
+
+#### 2. Image URL Sources
+The system attempts to extract image URLs from multiple LibreOffice properties:
+- `imageObj.Graphic.OriginURL` - Primary source for image location
+- `imageObj.GraphicURL` - Alternative property for image URL
+- Fallback handling for missing or inaccessible URLs
+
+#### 3. Filename Cleaning Rules
+Applied to all embedded images to ensure markdown compatibility:
+- **Lowercase conversion**: All filenames converted to lowercase
+- **Bracket removal**: `(` replaced with `-`, `)` removed entirely
+- **Space replacement**: Spaces replaced with `-` characters
+- **Path format**: Uses relative path `./img/filename.png`
+
+**Example transformations**:
+- `Image(1).PNG` → `image-1.png`
+- `My Photo.jpg` → `my-photo.jpg`
+- `diagram (final).gif` → `diagram-final.gif`
+
+#### 4. File Copying Process
+```basic
+Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As String, ByRef fileName As String) As Boolean
+    ' Convert LibreOffice URL to file system path
+    Dim sourcePath As String : sourcePath = ConvertFromURL(sourceURL)
+    
+    ' Create ./img/ directory if it doesn't exist
+    Dim imgDir As String : imgDir = targetDir & "img"
+    If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
+    
+    ' Copy file with overwrite enabled
+    fso.CopyFile sourcePath, targetPath, True
+End Function
+```
+
+### Integration Points
+
+#### 1. Header Image Processing
+- **Location**: First page header content
+- **Function**: `ProcessHeaderImage()` in DocModel.bas
+- **Output**: Prepended to document with double line break
+- **Alt text**: Uses "logo" as default if image title is empty
+
+#### 2. Document Image Processing
+- **Paragraph-anchored images**: Processed via `Image()` function
+- **Inline images**: Processed via `InlineImage()` function
+- **Integration**: Both functions use `ProcessImage()` for consistent handling
+
+#### 3. Image Reference Generation
+**Markdown format**:
+```markdown
+![alt-text](./img/filename.png)
+```
+
+**HTML format** (for inline images):
+```html
+<img inline="true" src="./img/filename.png" />
+```
+
+### Directory Structure
+```
+document-folder/
+├── document.odt
+├── document_hfm.md
+└── img/
+    ├── header-image.png
+    ├── diagram-1.jpg
+    └── photo-final.gif
+```
+
+### Error Handling
+- **Missing images**: Fallback to `./img/missing-image.png`
+- **URL extraction failure**: Uses generic filename based on image type
+- **File copy errors**: Continues processing with reference to intended location
+- **Directory creation**: Automatically creates `./img/` folder if needed
+
+### Remote URL Handling
+- **HTTP/HTTPS URLs**: Used directly without modification
+- **No local copying**: Remote images remain as external references
+- **Bandwidth consideration**: Remote images require internet access for viewing
+
+### Image Processing Flow
+```
+LibreOffice Image Object
+├── Extract URL/Properties
+├── Determine Type (Remote vs Embedded)
+├── Remote URL → Use directly
+└── Embedded Image
+    ├── Clean filename
+    ├── Copy to ./img/ folder
+    └── Generate relative path reference
+```
+
+### Future Enhancements
+- **Image optimization**: Resize large images for web use
+- **Format conversion**: Convert unsupported formats to web-friendly formats
+- **Batch processing**: Handle multiple images efficiently
+- **Error reporting**: Detailed logging of image processing issues
+- **Alternative text generation**: Auto-generate alt text from image content analysis

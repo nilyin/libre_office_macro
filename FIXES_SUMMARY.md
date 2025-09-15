@@ -252,3 +252,181 @@ All changes maintain the original functionality while improving reliability and 
 **Root Cause**: LibreOffice Basic Collection objects don't support `Is Nothing` comparison in newer versions
 **Solution**: Use `TypeName(props) = "Collection"` for safe type checking
 **Impact**: Resolves final runtime error in PrintTree function
+
+## Current Session Fixes (Table of Contents and Image Processing)
+
+### 4. Fixed Table of Contents Issues
+
+#### Problem 1: Incorrect Markdown Table Formatting
+**Issue**: Tables were exported with malformed markdown syntax causing rendering issues.
+
+**Root Cause**: 
+- `FormatCell` function only added pipe separator for non-first columns
+- Cell content with line breaks wasn't properly cleaned
+- Row formatting had extra pipe characters
+
+**Solution**:
+```basic
+' Fixed FormatCell function:
+Function FormatCell(ByRef txt, level As Long, index As Long, idxRow As Long)
+    ' Clean up cell content: remove line breaks and trim whitespace
+    Dim cleanTxt As String
+    cleanTxt = Replace(txt, CHR$(10), " ")
+    cleanTxt = Replace(cleanTxt, CHR$(13), " ")
+    cleanTxt = Trim(cleanTxt)
+    
+    ' Always add pipe separator before cell content
+    FormatCell = "|" & cleanTxt
+End Function
+
+' Fixed FormatRow function:
+Function FormatRow(ByRef txt, level As Long, index As Long, Colls As Long)
+    Dim i AS Long, r As String : r = ""
+    r = txt & "|" & CHR$(10)  ' Removed extra pipe at beginning
+    ' ... rest of function
+End Function
+```
+
+**Result**: Tables now render correctly in markdown with proper cell boundaries.
+
+#### Problem 2: Table of Contents Formatting Issues
+**Issue**: TOC items appeared as single line instead of proper list with indentation.
+
+**Root Cause**: 
+- Links weren't formatted as list items
+- No line breaks between TOC entries
+- Incorrect indentation for subsections
+
+**Solution**:
+```basic
+' Enhanced Link function for TOC formatting:
+If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
+    ' Count dots in text to determine nesting level
+    Dim dotCount As Long : dotCount = Len(t) - Len(Replace(t, ".", ""))
+    Dim indent As String : indent = String((dotCount - 1) * 4, " ")
+    Link = indent & linkResult & CHR$(10)
+Else
+    Link = linkResult
+End If
+```
+
+**Enhanced TOC Detection**: Added comprehensive synonyms for TOC sections:
+- **Russian**: оглавление, содержание, индекс, список глав, указатель, каталог, реестр
+- **English**: contents, index, table of contents, reference
+
+**Result**: TOC now displays as properly formatted list with correct indentation.
+
+### 5. Added Header Processing Feature
+
+#### New Feature: First Page Header Extraction
+**Purpose**: Extract and display header content (logo + text) at the beginning of generated markdown.
+
+**Implementation**:
+```basic
+Function ProcessHeader(ByRef Comp As Object) As String
+    ' Get current page style and process header content
+    ' Extract both text and images from header
+    ' Return formatted header content
+End Function
+
+Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
+    ' Process header images with proper naming and path handling
+    ' Return markdown image syntax
+End Function
+```
+
+**Integration**: Header content is prepended to document output in both HFM and HTML exports.
+
+### 6. Enhanced Image Processing System
+
+#### New Feature: Comprehensive Image Handling
+**Purpose**: Handle both remote URLs and embedded images with automatic extraction and copying.
+
+**Logic Implementation**:
+1. **Remote URLs** (http/https): Use directly without copying
+2. **Embedded Images**: Extract and copy to `./img/` folder with cleaned filenames
+
+**Image Processing Functions**:
+```basic
+Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As String, ByRef fileName As String) As Boolean
+    ' Copy embedded images to ./img/ folder
+    ' Create img directory if needed
+    ' Handle file existence and overwrite
+End Function
+
+Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
+    ' Determine if image is remote URL or embedded
+    ' Apply filename cleaning rules (lowercase, remove brackets/spaces)
+    ' Return appropriate markdown image syntax
+End Function
+```
+
+**Filename Cleaning Rules**:
+- Convert to lowercase
+- Replace `(` with `-`, remove `)`
+- Replace spaces with `-`
+- Use relative path `./img/filename.png`
+
+**Updated Functions**: Enhanced existing `Image()` and `InlineImage()` functions to use new processing logic.
+
+## Remaining Issues and Fix Plan
+
+### Issue 1: Header Image Not Copying
+**Problem**: Header images are detected and referenced but not physically copied to `./img/` folder.
+
+**Diagnosis**: 
+- Image URL extraction may be failing for header images
+- File copying function may have path resolution issues
+- LibreOffice header image object properties may differ from document images
+
+**Fix Plan**:
+1. **Debug Image URL Extraction**: Add logging to verify image URL retrieval from header objects
+2. **Test File Copying Function**: Verify `CopyImageFile` works with different image sources
+3. **Alternative Image Access**: Try different LibreOffice properties for header images
+4. **Path Resolution**: Ensure proper path conversion from LibreOffice URLs to file system paths
+
+### Issue 2: LaTeX Formula Ampersand Encoding
+**Problem**: LaTeX formulas contain `&` characters that cause KaTeX parsing errors in markdown preview.
+
+**Current Error**: `ParseError: KaTeX parse error: Expected 'EOF', got '&' at position 428`
+
+**Root Cause Analysis**:
+- LaTeX `&` characters in matrix and alignment environments
+- Possible HTML entity encoding (`&amp;`) in formula processing chain
+- KaTeX parser expects proper LaTeX syntax
+
+**Fix Plan**:
+1. **LaTeX Syntax Review**: Verify correct LaTeX syntax for matrices and alignments
+2. **Entity Encoding Fix**: Prevent HTML entity encoding in formula processing
+3. **Alternative LaTeX Syntax**: Use different LaTeX constructs that don't trigger parsing errors
+4. **KaTeX Compatibility**: Ensure generated LaTeX is compatible with KaTeX parser
+
+**Specific LaTeX Issues**:
+- Matrix syntax: `x _ 1 & ... & x _ n` may need escaping or alternative syntax
+- Alignment environments: `\begin{align}` with `&` alignment markers
+- Text blocks: `\text{5. Sym & Sum: }` contains problematic `&`
+
+**Potential Solutions**:
+- Replace `&` with `\&` in text blocks
+- Use `array` environment instead of `matrix` for better compatibility
+- Implement KaTeX-specific LaTeX generation mode
+
+### Testing Requirements
+
+**Image Processing Testing**:
+1. Test header image extraction with different image types
+2. Verify file copying to `./img/` folder
+3. Test both remote URLs and embedded images
+4. Validate filename cleaning rules
+
+**Formula Processing Testing**:
+1. Test LaTeX generation with various formula types
+2. Verify KaTeX compatibility
+3. Test matrix and alignment environments
+4. Validate ampersand handling in different contexts
+
+### Priority Order
+1. **High Priority**: Fix header image copying (affects document presentation)
+2. **High Priority**: Fix LaTeX formula rendering (affects mathematical content)
+3. **Medium Priority**: Enhance error handling and logging for debugging
+4. **Low Priority**: Optimize image processing performance

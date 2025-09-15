@@ -215,6 +215,39 @@ Function PrintTree(ByRef node, Optional ByRef props As Collection)
     PrintTree = s
 End Function
 
+' Process image with copying logic for embedded images
+' @param imageObj: LibreOffice image object
+' @param docURL: Document URL for determining target directory
+' @return: Formatted markdown image string
+Public Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
+    Dim altText As String : altText = IIf(imageObj.Title = "", "image", imageObj.Title)
+    Dim imageName As String
+    On Error Resume Next
+    imageName = imageObj.Graphic.OriginURL
+    If imageName = "" Then imageName = imageObj.GraphicURL
+    On Error GoTo 0
+    
+    If imageName <> "" Then
+        ' Check if it's a remote URL
+        If Left(LCase(imageName), 4) = "http" Then
+            ProcessImage = "![" & altText & "](" & imageName & ")"
+        Else
+            ' Extract and copy embedded image
+            Dim fileName As String : fileName = Mid(imageName, InStrRev(imageName, "/") + 1)
+            fileName = LCase(fileName)
+            fileName = Replace(fileName, "(", "-")
+            fileName = Replace(fileName, ")", "")
+            fileName = Replace(fileName, " ", "-")
+            
+            Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\"))
+            CopyImageFile imageName, docDir, fileName
+            ProcessImage = "![" & altText & "](./img/" & fileName & ")"
+        End If
+    Else
+        ProcessImage = "![" & altText & "](./img/missing-image.png)"
+    End If
+End Function
+
 ' Generate the complete formatted output from document tree
 ' @return: Complete formatted document content
 Public Function MakeView() As String

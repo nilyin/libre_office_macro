@@ -73,16 +73,20 @@ End Function
 ' @param lo: LibreOffice image object
 ' @return: Formatted markdown image string with alt text and description
 Function Image(ByRef lo)
-    Image = "![" & lo.Title & "](" & lo.Graphic.OriginURL & _
-        " """ & lo.Description & """)" & CHR$(10)
+    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, ThisComponent.URL)
+    Image = imageUrl & CHR$(10)
 End Function
 
 ' Generate inline HTML image tag from LibreOffice image object
 ' @param lo: LibreOffice image object
 ' @return: HTML img tag with inline attribute
 Function InlineImage(ByRef lo)
-    InlineImage = "<img inline=""true"" src=""" & _
-        lo.Graphic.OriginURL & """ />"
+    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, ThisComponent.URL)
+    ' Extract src from markdown format
+    Dim srcStart As Long : srcStart = InStr(imageUrl, "](")
+    Dim srcEnd As Long : srcEnd = InStr(srcStart, imageUrl, ")")
+    Dim src As String : src = Mid(imageUrl, srcStart + 2, srcEnd - srcStart - 2)
+    InlineImage = "<img inline=""true"" src=""" & src & """ />"
 End Function
 
 ' Generate markdown link from document hyperlink node
@@ -117,12 +121,12 @@ Function Link(ByRef node)
         linkResult = "[" & t & "](" & url & ")"
     End If
     
-    ' Format Table of Contents links as list items
+    ' Format Table of Contents links with proper indentation
     If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
-        ' Count dots to determine nesting level
+        ' Count dots in text to determine nesting level
         Dim dotCount As Long : dotCount = Len(t) - Len(Replace(t, ".", ""))
-        Dim indent As String : indent = String((dotCount - 1) * 2, " ")
-        Link = indent & "- " & linkResult & CHR$(10)
+        Dim indent As String : indent = String((dotCount - 1) * 4, " ")
+        Link = indent & linkResult & CHR$(10)
     Else
         Link = linkResult
     End If
@@ -231,7 +235,10 @@ Function Formula(ByRef txt As String)
     m.Set_Formula(txt)          ' Set the input formula
     m.vAdapter = New vLatex     ' Use LaTeX output adapter
     m.vAdapter.mMath = m        ' Link adapter to math processor
-    Formula = "$$" & CHR$(10) & m.Get_Formula() & CHR$(10) &  "$$" & CHR$(10)
+    Dim formulaContent As String : formulaContent = m.Get_Formula()
+    ' Fix ampersand encoding issues
+    formulaContent = Replace(formulaContent, "&amp;", "&")
+    Formula = "$$" & CHR$(10) & formulaContent & CHR$(10) &  "$$" & CHR$(10)
 End Function
 
 ' Extract and remove section title from section node
