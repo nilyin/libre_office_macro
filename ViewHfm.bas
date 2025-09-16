@@ -110,23 +110,25 @@ Function Link(ByRef node)
             ' Convert to GitHub-style anchor based on text content
             ' GitHub converts: "2.1. Ссылки" -> "21-ссылки"
             anchor = LCase(t)
-            anchor = Replace(anchor, ".", "")
+            ' Replace dots with dashes, then spaces with dashes
+            anchor = Replace(anchor, ".", "-")
             anchor = Replace(anchor, " ", "-")
             anchor = Replace(anchor, ",", "")
             anchor = Replace(anchor, "(", "")
             anchor = Replace(anchor, ")", "")
+            ' Remove consecutive dashes
+            Do While InStr(anchor, "--") > 0
+                anchor = Replace(anchor, "--", "-")
+            Loop
         End If
         linkResult = "[" & t & "](#" & anchor & ")"
     Else
         linkResult = "[" & t & "](" & url & ")"
     End If
     
-    ' Format Table of Contents links with proper indentation
+    ' Format Table of Contents links without indentation
     If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
-        ' Count dots in text to determine nesting level
-        Dim dotCount As Long : dotCount = Len(t) - Len(Replace(t, ".", ""))
-        Dim indent As String : indent = String((dotCount - 1) * 4, " ")
-        Link = indent & linkResult & CHR$(10)
+        Link = linkResult & CHR$(10) & CHR$(10)
     Else
         Link = linkResult
     End If
@@ -236,8 +238,10 @@ Function Formula(ByRef txt As String)
     m.vAdapter = New vLatex     ' Use LaTeX output adapter
     m.vAdapter.mMath = m        ' Link adapter to math processor
     Dim formulaContent As String : formulaContent = m.Get_Formula()
-    ' Fix ampersand encoding issues
-    formulaContent = Replace(formulaContent, "&amp;", "&")
+    ' Fix LaTeX syntax for KaTeX compatibility - remove all # characters
+    Do While InStr(formulaContent, "#") > 0
+        formulaContent = Replace(formulaContent, "#", "")
+    Loop
     Formula = "$$" & CHR$(10) & formulaContent & CHR$(10) &  "$$" & CHR$(10)
 End Function
 

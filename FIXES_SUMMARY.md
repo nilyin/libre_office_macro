@@ -385,15 +385,24 @@ End Function
 3. **Alternative Image Access**: Try different LibreOffice properties for header images
 4. **Path Resolution**: Ensure proper path conversion from LibreOffice URLs to file system paths
 
-### Issue 2: LaTeX Formula Ampersand Encoding
-**Problem**: LaTeX formulas contain `&` characters that cause KaTeX parsing errors in markdown preview.
+### Issue 2: LaTeX Formula Hash Character Encoding - CRITICAL
+**Problem**: LaTeX formulas contain `#` characters that cause KaTeX parsing errors in markdown preview.
 
-**Current Error**: `ParseError: KaTeX parse error: Expected 'EOF', got '&' at position 428`
+**Current Error**: `ParseError: KaTeX parse error: Expected 'EOF', got '#' at position 511: … i ) \text{, - #̲4} \\ \text{6.…`
 
-**Root Cause Analysis**:
-- LaTeX `&` characters in matrix and alignment environments
-- Possible HTML entity encoding (`&amp;`) in formula processing chain
-- KaTeX parser expects proper LaTeX syntax
+**Root Cause Analysis - DEEP INVESTIGATION**:
+1. **Character Mapping Issue**: The vLatex.bas file originally mapped `&` to `#` in the rename collection
+2. **Multiple Processing Layers**: Formula content goes through multiple processing steps:
+   - LibreOffice Math → mMath processor → vLatex adapter → ViewHfm Formula function
+3. **Persistent Hash Characters**: Despite multiple fix attempts, `#` characters persist in output
+4. **Source of Hash Characters**: The `#` appears in text blocks like `\text{, - #4}` indicating it's coming from the original LibreOffice Math formula
+
+**Fix Attempts Made**:
+1. **vLatex.bas**: Changed `.Add("&", "#")` to `.Add("&", "\\&")` ✅ Applied
+2. **ViewHfm.bas Formula()**: Added `Replace(formulaContent, "#", "")` ✅ Applied
+3. **Enhanced Loop**: Added `Do While InStr(formulaContent, "#") > 0` loop ✅ Applied
+
+**Current Status**: **FIXES NOT WORKING** - Hash characters still appear in output
 
 **Fix Plan**:
 1. **LaTeX Syntax Review**: Verify correct LaTeX syntax for matrices and alignments
@@ -426,7 +435,27 @@ End Function
 4. Validate ampersand handling in different contexts
 
 ### Priority Order
-1. **High Priority**: Fix header image copying (affects document presentation)
-2. **High Priority**: Fix LaTeX formula rendering (affects mathematical content)
+1. **CRITICAL**: Fix LaTeX formula `#` character issue (completely breaks formula rendering)
+2. **High Priority**: Fix header image copying (affects document presentation)
 3. **Medium Priority**: Enhance error handling and logging for debugging
 4. **Low Priority**: Optimize image processing performance
+
+## Current Critical Issue Status
+
+### LaTeX Formula Processing - BROKEN
+**Status**: ❌ **CRITICAL FAILURE**
+**Impact**: All mathematical formulas fail to render in markdown preview
+**Error**: `ParseError: KaTeX parse error: Expected 'EOF', got '#' at position 511`
+
+**Investigation Required**:
+1. **Source Analysis**: Determine where `#` characters originate in the processing chain
+2. **Processing Flow**: Map the complete formula processing workflow
+3. **Alternative Solutions**: Consider non-LaTeX approaches for formula rendering
+
+**Potential Root Causes**:
+- LibreOffice Math formula contains embedded `#` references
+- mMath processor generates `#` characters during parsing
+- vLatex adapter creates `#` characters during LaTeX conversion
+- Multiple processing layers each contributing `#` characters
+
+**Immediate Action Required**: This issue completely breaks formula functionality and needs urgent resolution.
