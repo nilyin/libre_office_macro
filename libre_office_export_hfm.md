@@ -290,10 +290,10 @@ $$
 \text{2. Breckets: } \overbrace{ \underbrace{ x \left \lbrace \frac{\langle a _ { i \times 2 } ^ { 1...n } + b \rangle }{[ c + d ] } \right \rbrace y } _{ m }  } ^{ n }  \\ 
 \text{3. Root: } z = \sqrt [{ 3 - q } ] { x + 1 }  \text{, - [2]} \\ 
 \text{4. Integrals: } y = t + \int _{ 1 } ^{ n } x + \iint _{ i } y \text{, - {3}} \\ 
-\text{5. Sym & Sum: } y = \pi  \times r ^ 2 + \sum _{ i = 1 } ^{ \infty } f ( i ) \text{, - 4} \\ 
+\text{5. Sym \& Sum: } y = \pi  \times r ^ 2 + \sum _{ i = 1 } ^{ \infty } f ( i ) \text{, - #4} \\ 
 \text{6. Matrix: } M = \left ( 
 \begin{matrix} 
- x _ 1  ...  x _ n  y _ 1  ...  y _ n  z _ 1  ...  z _ n 
+ x _ 1 # ... # x _ n # # y _ 1 # ... # y _ n # # z _ 1 # ... # z _ n 
 \end{matrix} 
 \right ) 
 \end{align}

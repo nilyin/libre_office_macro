@@ -18,8 +18,6 @@ Private Sub Class_Initialize()
         .Add("_", "from")
         .Add("^", "to")
         .Add("\ " & CHR$(10), "newline")
-        .Add("&", "\&")
-        .Add("\\ ", "\\")
     End With
     With extraChar
         .Add("^", "overbrace")
@@ -43,7 +41,7 @@ Public Function BeginNode(ByRef node As fNode) As String
     Dim s As String : s = ""
     Select Case node.type_
         Case mMath.NodeType("Text")
-            s = "\text{" & node.name_ & "} "
+            s = "\text{" & Replace(node.name_, "&", "\&") & "} "
         Case mMath.NodeType("Key")
             s = ReplaceKey(node)
         Case mMath.NodeType("Group")
@@ -55,10 +53,12 @@ Public Function BeginNode(ByRef node As fNode) As String
                 s = s & c & node.extra.lname & " "
             End If
         Case Else ' Word
-            s = node.name_ & " "
-            On Local Error Goto ErrRename
-                s = rename(node.name_) & " "
-            ErrRename:
+            On Local Error GoTo ErrWord
+            s = "\" & rename(node.name_) & " " ' try to find in rename collection
+            GoTo EndWord
+ErrWord:
+            s = node.name_ & " " ' if not found - it's a simple word
+EndWord:
             If Mid(s, 1, 1) = "%" Then s = "\" & Mid(s, 2, Len(s) - 1) & " " ' greece sym
     End Select
     BeginNode = s
@@ -164,4 +164,3 @@ Public Function PrintMe(ByRef node As fNode) As String
     Print_(node) & CHR$(10) & _
     "\end{align}"
 End Function
-

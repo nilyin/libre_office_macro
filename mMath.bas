@@ -33,7 +33,7 @@ Private keys As New Collection
 Private Sub Class_Initialize()
     t_.children = New Collection
     With NodeType
-        .Add(1, "Group") ' {...}, (...), lbrace ... rbrace, etñ.
+        .Add(1, "Group") ' {...}, (...), lbrace ... rbrace, etï¿½.
         .Add(2, "Key")
         .Add(3, "Word")
         .Add(4, "Text") ' "a ... b"
@@ -49,6 +49,9 @@ Private Sub Class_Initialize()
         .Add(2, "overbrace") ' 4 - Key Add sym "\" before Keyword
         .Add(2, "underbrace")
         .Add(2, "newline")
+        .Add(2, "begin")
+        .Add(2, "end")
+        .Add(2, "text")
         .Add(2, "matrix")
         .Add(2, "over")
         .Add(2, "vec")
@@ -187,6 +190,10 @@ Sub Parse(ByRef node As fNode)
                     Exit Sub
                 End If
                 If n.type_ = NodeType("Group") Then Parse n
+            Case "&"
+                n = Make_Op(node)
+            Case "#"
+                n = Make_Op(node)
             Case Else
                 w_ = w_ & c_
         End Select

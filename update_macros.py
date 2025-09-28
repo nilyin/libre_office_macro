@@ -4,6 +4,7 @@ Script to update macros in LibreOffice ODT file
 Extracts ODT, updates macro files, and repackages
 """
 import zipfile
+import re
 import os
 import shutil
 import tempfile
@@ -42,11 +43,15 @@ def update_odt_macros():
                     with open(xml_file_path, 'r', encoding='utf-8') as f:
                         xml_content = f.read()
                     
-                    # Simple replacement - find content between script tags
-                    start_tag = '<?xml version="1.0" encoding="UTF-8"?>'
-                    if start_tag in xml_content:
-                        # Keep XML structure, update script content
-                        print(f"Updated {bas_file} -> {xml_path}")
+                    # Replace content between <script:source-code> tags
+                    # The CDATA wrapper is important
+                    new_xml_content = re.sub(
+                        r'(<script:source-code>)(.*?)(</script:source-code>)',
+                        f'\\1<![CDATA[{content}]]>\\3',
+                        xml_content, flags=re.DOTALL)
+                    with open(xml_file_path, 'w', encoding='utf-8') as f:
+                        f.write(new_xml_content)
+                    print(f"Updated {bas_file} -> {xml_path}")
         
         # Repackage ODT
         with zipfile.ZipFile(odt_file, 'w', zipfile.ZIP_DEFLATED) as zip_ref:

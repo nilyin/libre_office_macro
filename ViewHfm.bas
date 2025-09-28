@@ -238,10 +238,6 @@ Function Formula(ByRef txt As String)
     m.vAdapter = New vLatex     ' Use LaTeX output adapter
     m.vAdapter.mMath = m        ' Link adapter to math processor
     Dim formulaContent As String : formulaContent = m.Get_Formula()
-    ' Fix LaTeX syntax for KaTeX compatibility - remove all # characters
-    Do While InStr(formulaContent, "#") > 0
-        formulaContent = Replace(formulaContent, "#", "")
-    Loop
     Formula = "$$" & CHR$(10) & formulaContent & CHR$(10) &  "$$" & CHR$(10)
 End Function
 

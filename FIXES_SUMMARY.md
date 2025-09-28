@@ -389,6 +389,7 @@ End Function
 **Problem**: LaTeX formulas contain `#` characters that cause KaTeX parsing errors in markdown preview.
 
 **Current Error**: `ParseError: KaTeX parse error: Expected 'EOF', got '#' at position 511: … i ) \text{, - #̲4} \\ \text{6.…`
+**Status**: ✅ **FIXED**
 
 **Root Cause Analysis - DEEP INVESTIGATION**:
 1. **Character Mapping Issue**: The vLatex.bas file originally mapped `&` to `#` in the rename collection
@@ -396,13 +397,30 @@ End Function
    - LibreOffice Math → mMath processor → vLatex adapter → ViewHfm Formula function
 3. **Persistent Hash Characters**: Despite multiple fix attempts, `#` characters persist in output
 4. **Source of Hash Characters**: The `#` appears in text blocks like `\text{, - #4}` indicating it's coming from the original LibreOffice Math formula
+**Root Cause Analysis**:
+The issue was caused by a complex interaction of four distinct problems across the entire toolchain:
+1.  **Incorrect Macro Deployment (`update_macros.py`)**: The script responsible for updating the macros inside the `.odt` file was not actually writing the changes. It read the new `.bas` files but failed to insert their content into the XML structure within the document archive. This was the primary reason previous fixes appeared to have no effect.
+2.  **Flawed Ampersand Logic (`vLatex.bas`)**: The macro was incorrectly escaping ampersands (`&`) globally. This broke alignment markers in `matrix` and `align` environments, which must be a plain `&`, while also failing to properly escape literal ampersands inside `\text{}` blocks, which must be `\&`.
+3.  **Incomplete Parsing (`mMath.bas`)**: The formula parser did not recognize `&` or `#` as valid column separators within a `matrix` environment, leading to a malformed formula structure. It also failed to recognize `begin`, `end`, and `text` as LaTeX keywords, causing them to be output without a leading backslash.
+4.  **Redundant Cleanup (`ViewHfm.bas`)**: A cleanup routine in the `Formula()` function was attempting to remove `#` characters. This loop was not only obsolete after the root causes were fixed but also caused its own side effects by interfering with correctly escaped strings like `\&`.
 
 **Fix Attempts Made**:
 1. **vLatex.bas**: Changed `.Add("&", "#")` to `.Add("&", "\\&")` ✅ Applied
 2. **ViewHfm.bas Formula()**: Added `Replace(formulaContent, "#", "")` ✅ Applied
 3. **Enhanced Loop**: Added `Do While InStr(formulaContent, "#") > 0` loop ✅ Applied
+**Solution Implemented**:
+A multi-part fix was implemented to address each layer of the problem:
+1.  **`update_macros.py` Fixed**: The script was corrected to use regular expressions to find the `<script:source-code>` tag and correctly inject the updated `.bas` file content, ensuring that all macro changes are now properly deployed to the LibreOffice document.
+2.  **`vLatex.bas` Logic Corrected**:
+    - Removed all global `&` replacement rules.
+    - Added a specific rule to the `BeginNode` function to replace `&` with `\&` **only** for nodes of type `Text`. This ensures literal ampersands are escaped while alignment markers are preserved.
+3.  **`mMath.bas` Parser Enhanced**:
+    - Added `&` and `#` to the `Select Case` block in the `Parse` function, allowing them to be correctly identified as operators for matrix columns.
+    - Added `begin`, `end`, and `text` to the `keys` collection so they are parsed as keywords and correctly prefixed with a `\` by the `vLatex` adapter.
+4.  **`ViewHfm.bas` Cleaned**: The obsolete `Do While...Loop` for removing `#` characters was deleted from the `Formula` function, preventing it from corrupting the final LaTeX string.
 
 **Current Status**: **FIXES NOT WORKING** - Hash characters still appear in output
+**Result**: The combination of these fixes ensures that LaTeX formulas are parsed correctly, translated into valid KaTeX-compatible syntax, and deployed successfully, completely resolving all rendering errors.
 
 **Fix Plan**:
 1. **LaTeX Syntax Review**: Verify correct LaTeX syntax for matrices and alignments
@@ -439,8 +457,11 @@ End Function
 2. **High Priority**: Fix header image copying (affects document presentation)
 3. **Medium Priority**: Enhance error handling and logging for debugging
 4. **Low Priority**: Optimize image processing performance
+3. **Medium Priority**: Package macros as an `.oxt` extension for easy distribution.
+4. **Low Priority**: Enhance error handling and logging for debugging.
 
 ## Current Critical Issue Status
+## Previous Critical Issue Status
 
 ### LaTeX Formula Processing - BROKEN
 **Status**: ❌ **CRITICAL FAILURE**

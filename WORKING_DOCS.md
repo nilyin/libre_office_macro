@@ -5,6 +5,48 @@ The export macros convert LibreOffice Writer documents (.odt) to Habr Flavored M
 
 ## Step-by-Step Export Process
 
+### A. Macro Installation via Extension (Recommended)
+
+To make the export macros available globally across all LibreOffice documents, they can be packaged into an `.oxt` extension file and installed.
+
+#### 1. Creating the Extension File
+A Python script, `create_oxt.py`, is provided to automate this process.
+
+**To run the script:**
+```bash
+python create_oxt.py
+```
+This command reads all the necessary `.bas` files, generates the required XML metadata (`description.xml`, `manifest.xml`, etc.), and packages everything into a single `DocExport.oxt` file in the project's root directory.
+
+#### 2. Installing the Extension from Command Line
+Once the `DocExport.oxt` file is created, it can be installed into LibreOffice using the `unopkg` command-line tool. Using the `--shared` flag installs the extension for all users, making the macros globally accessible.
+
+**Windows:**
+```bash
+"C:\Program Files\LibreOffice\program\unopkg.com" add --shared "C:\path\to\your\project\DocExport.oxt"
+```
+
+**macOS:**
+```bash
+/Applications/LibreOffice.app/Contents/MacOS/unopkg add --shared /path/to/your/project/DocExport.oxt
+```
+
+**Linux:**
+```bash
+/usr/lib/libreoffice/program/unopkg add --shared /path/to/your/project/DocExport.oxt
+```
+
+After installation, the `MakeDocHfmView` and `MakeDocHtmlView` macros will be available in any LibreOffice Writer document via `Tools -> Macros -> Run Macro...` under the `DocExport` library.
+
+### B. Manual Export Process (Per-Document Macros)
+
+This process describes running the macros embedded within a single document. This is useful for development but less convenient for general use. The `update_macros.py` script is used to keep the embedded macros in sync with the source `.bas` files.
+
+**To update embedded macros:**
+```bash
+python update_macros.py
+```
+
 ### 1. Document Parsing (`MakeModel` function in DocModel.bas)
 ```
 Document (.odt) → Document Tree Structure → Formatted Output
