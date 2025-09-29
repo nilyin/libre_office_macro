@@ -86,6 +86,8 @@ Function InlineImage(ByRef lo)
     Dim srcStart As Long : srcStart = InStr(imageUrl, "](")
     Dim srcEnd As Long : srcEnd = InStr(srcStart, imageUrl, ")")
     Dim src As String : src = Mid(imageUrl, srcStart + 2, srcEnd - srcStart - 2)
+    ' Remove ./ prefix if present
+    If Left(src, 2) = "./" Then src = Mid(src, 3)
     InlineImage = "<img inline=""true"" src=""" & src & """ />"
 End Function
 

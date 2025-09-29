@@ -12,6 +12,8 @@ Const STYLE_HEAD = "Heading"     ' Prefix for heading styles
 Public docTree                   ' Document tree structure containing parsed content
 Public viewAdapter              ' Output format adapter (HFM, HTML, etc.)
 Public props                    ' Properties collection for formatting options
+Public imageCounter As Long      ' Counter for image naming
+Public docPrefix As String       ' Document name prefix for image naming
 
 ' Process document node based on its style type
 ' @param node: Document node with style information
@@ -215,11 +217,110 @@ Function PrintTree(ByRef node, Optional ByRef props As Collection)
     PrintTree = s
 End Function
 
+' Format number with leading zeros (minimum 2 digits)
+' @param num: Number to format
+' @return: Formatted number string
+Private Function Format_Num(ByVal num As Long) As String
+    If num < 10 Then
+        Format_Num = "0" & CStr(num)
+    Else
+        Format_Num = CStr(num)
+    End If
+End Function
+
+' Generate document prefix from filename for image naming
+' @param docURL: Document URL
+' @return: Prefix string for image names
+Private Function GenerateDocPrefix(ByRef docURL As String) As String
+    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\") + 1)
+    fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
+    
+    ' Split by separators and take first 4 chars from each word
+    Dim words : words = Split(Replace(Replace(fileName, "_", " "), "-", " "), " ")
+    Dim prefix As String : prefix = ""
+    Dim i As Long
+    For i = 0 To UBound(words)
+        If Len(words(i)) > 0 Then
+            If Len(words(i)) >= 4 Then
+                prefix = prefix & Left(words(i), 4) & "_"
+            Else
+                prefix = prefix & words(i) & "_"
+            End If
+        End If
+    Next
+    If Len(prefix) > 0 Then prefix = Left(prefix, Len(prefix) - 1) ' Remove trailing underscore
+    GenerateDocPrefix = prefix
+End Function
+
+' Extract and save image from LibreOffice graphic object
+' @param imageObj: LibreOffice image object
+' @param targetDir: Target directory path
+' @param fileName: Target filename
+' @return: True if extraction successful
+Private Function ExtractImageFile(ByRef imageObj, ByRef targetDir As String, ByRef fileName As String) As Boolean
+    On Error Resume Next
+    Dim fso : fso = CreateObject("Scripting.FileSystemObject")
+    Dim imgDir As String : imgDir = targetDir & "img"
+    Dim targetPath As String : targetPath = imgDir & "\" & fileName
+    
+    ' Create img directory if it doesn't exist
+    If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
+    
+    ' Try to get the graphic object and export it
+    Dim graphic : graphic = imageObj.Graphic
+    If Not IsEmpty(graphic) Then
+        ' Create GraphicProvider service
+        Dim graphicProvider : graphicProvider = CreateUnoService("com.sun.star.graphic.GraphicProvider")
+        
+        ' Set up export properties
+        Dim exportProps(1) As New com.sun.star.beans.PropertyValue
+        exportProps(0).Name = "URL"
+        exportProps(0).Value = ConvertToURL(targetPath)
+        exportProps(1).Name = "MimeType"
+        exportProps(1).Value = "image/png"
+        
+        ' Export the graphic
+        graphicProvider.storeGraphic(graphic, exportProps())
+        ExtractImageFile = (Err.Number = 0)
+    Else
+        ExtractImageFile = False
+    End If
+    On Error GoTo 0
+End Function
+
+' Copy image file from external source to img folder
+' @param sourceURL: Source image URL
+' @param targetDir: Target directory path
+' @param fileName: Target filename
+' @return: True if copy successful
+Private Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As String, ByRef fileName As String) As Boolean
+    On Error Resume Next
+    Dim fso : fso = CreateObject("Scripting.FileSystemObject")
+    Dim imgDir As String : imgDir = targetDir & "img"
+    Dim targetPath As String : targetPath = imgDir & "\" & fileName
+    
+    ' Create img directory if it doesn't exist
+    If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
+    
+    ' External file reference
+    Dim sourcePath As String : sourcePath = ConvertFromURL(sourceURL)
+    If fso.FileExists(sourcePath) Then
+        fso.CopyFile sourcePath, targetPath, True
+        CopyImageFile = (Err.Number = 0)
+    Else
+        CopyImageFile = False
+    End If
+    On Error GoTo 0
+End Function
+
 ' Process image with copying logic for embedded images
 ' @param imageObj: LibreOffice image object
 ' @param docURL: Document URL for determining target directory
 ' @return: Formatted markdown image string
 Public Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
+    ' Initialize document prefix if not set
+    If docPrefix = "" Then docPrefix = GenerateDocPrefix(docURL)
+    
     Dim altText As String : altText = IIf(imageObj.Title = "", "image", imageObj.Title)
     Dim imageName As String
     On Error Resume Next
@@ -227,25 +328,58 @@ Public Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
     If imageName = "" Then imageName = imageObj.GraphicURL
     On Error GoTo 0
     
-    If imageName <> "" Then
-        ' Check if it's a remote URL
-        If Left(LCase(imageName), 4) = "http" Then
-            ProcessImage = "![" & altText & "](" & imageName & ")"
-        Else
-            ' Extract and copy embedded image
-            Dim fileName As String : fileName = Mid(imageName, InStrRev(imageName, "/") + 1)
-            fileName = LCase(fileName)
-            fileName = Replace(fileName, "(", "-")
-            fileName = Replace(fileName, ")", "")
-            fileName = Replace(fileName, " ", "-")
-            
-            Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\"))
-            CopyImageFile imageName, docDir, fileName
-            ProcessImage = "![" & altText & "](./img/" & fileName & ")"
+    ' Check if image has a hyperlink URL (external link)
+    Dim hasExternalLink As Boolean : hasExternalLink = False
+    On Error Resume Next
+    If imageObj.HyperLinkURL <> "" Then
+        If Left(LCase(imageObj.HyperLinkURL), 4) = "http" Then
+            hasExternalLink = True
+            ProcessImage = "![" & altText & "](" & imageObj.HyperLinkURL & ")"
+        End If
+    End If
+    On Error GoTo 0
+    
+    If hasExternalLink Then
+        Exit Function
+    End If
+    
+    ' Check if it's a remote URL in the image source itself
+    If imageName <> "" And Left(LCase(imageName), 4) = "http" Then
+        ProcessImage = "![" & altText & "](" & imageName & ")"
+        Exit Function
+    End If
+    
+    ' This is an embedded/local image - extract it
+    imageCounter = imageCounter + 1
+    
+    ' Generate filename based on requirements
+    Dim fileName As String
+    If imageObj.Name <> "" And imageObj.Name <> "Graphic1" And imageObj.Name <> "Image1" Then
+        ' Use existing name if available and not default
+        fileName = imageObj.Name
+        ' Ensure proper extension
+        If Right(LCase(fileName), 4) <> ".png" And Right(LCase(fileName), 4) <> ".jpg" And Right(LCase(fileName), 5) <> ".jpeg" Then
+            fileName = fileName & ".png"
         End If
     Else
-        ProcessImage = "![" & altText & "](./img/missing-image.png)"
+        ' Generate name: prefix_XX.png
+        fileName = docPrefix & "_" & Format_Num(imageCounter) & ".png"
     End If
+    
+    Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\"))
+    
+    ' Try to extract embedded image first, then try copying external file
+    Dim success As Boolean : success = False
+    If Not IsEmpty(imageObj.Graphic) Then
+        success = ExtractImageFile(imageObj, docDir, fileName)
+    End If
+    
+    If Not success And imageName <> "" Then
+        success = CopyImageFile(imageName, docDir, fileName)
+    End If
+    
+    ' Always return the markdown reference, even if extraction failed
+    ProcessImage = "![" & altText & "](img/" & fileName & ")"
 End Function
 
 ' Generate the complete formatted output from document tree

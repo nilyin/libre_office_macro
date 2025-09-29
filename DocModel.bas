@@ -242,58 +242,64 @@ Function ProcessHeader(ByRef Comp As Object) As String
     ProcessHeader = headerContent
 End Function
 
-Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As String, ByRef fileName As String) As Boolean
-    On Error Resume Next
-    Dim fso : fso = CreateObject("Scripting.FileSystemObject")
-    Dim sourcePath As String : sourcePath = ConvertFromURL(sourceURL)
-    Dim imgDir As String : imgDir = targetDir & "img"
-    Dim targetPath As String : targetPath = imgDir & "\" & fileName
-    
-    ' Create img directory if it doesn't exist
-    If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
-    
-    ' Copy file if source exists
-    If fso.FileExists(sourcePath) Then
-        fso.CopyFile sourcePath, targetPath, True
-        CopyImageFile = (Err.Number = 0)
-    Else
-        CopyImageFile = False
-    End If
-    On Error GoTo 0
-End Function
 
-Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
-    Dim altText As String : altText = IIf(imageObj.Title = "", "image", imageObj.Title)
+
+Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
+    Dim altText As String : altText = IIf(imageObj.Title = "", "logo", imageObj.Title)
     Dim imageName As String
     On Error Resume Next
     imageName = imageObj.Graphic.OriginURL
     If imageName = "" Then imageName = imageObj.GraphicURL
     On Error GoTo 0
     
-    If imageName <> "" Then
-        ' Check if it's a remote URL
-        If Left(LCase(imageName), 4) = "http" Then
-            ProcessImage = "![" & altText & "](" & imageName & ")"
-        Else
-            ' Extract and copy embedded image
-            Dim fileName As String : fileName = Mid(imageName, InStrRev(imageName, "/") + 1)
-            fileName = LCase(fileName)
-            fileName = Replace(fileName, "(", "-")
-            fileName = Replace(fileName, ")", "")
-            fileName = Replace(fileName, " ", "-")
-            
-            Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\"))
-            CopyImageFile imageName, docDir, fileName
-            ProcessImage = "![" & altText & "](./img/" & fileName & ")"
+    ' Check if image has a hyperlink URL (external link)
+    Dim hasExternalLink As Boolean : hasExternalLink = False
+    On Error Resume Next
+    If imageObj.HyperLinkURL <> "" Then
+        If Left(LCase(imageObj.HyperLinkURL), 4) = "http" Then
+            hasExternalLink = True
+            ProcessHeaderImage = "![" & altText & "](" & imageObj.HyperLinkURL & ")" & CHR$(10) & CHR$(10)
         End If
-    Else
-        ProcessImage = "![" & altText & "](./img/missing-image.png)"
     End If
-End Function
-
-Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
-    Dim altText As String : altText = IIf(imageObj.Title = "", "logo", imageObj.Title)
-    ProcessHeaderImage = ProcessImage(imageObj, docURL) & CHR$(10) & CHR$(10)
+    On Error GoTo 0
+    
+    If hasExternalLink Then
+        Exit Function
+    End If
+    
+    ' Check if it's a remote URL in the image source itself
+    If imageName <> "" And Left(LCase(imageName), 4) = "http" Then
+        ProcessHeaderImage = "![" & altText & "](" & imageName & ")" & CHR$(10) & CHR$(10)
+        Exit Function
+    End If
+    
+    ' For header images, use a simple naming scheme (only extract first header image)
+    Dim fileName As String : fileName = "header-logo.png"
+    Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\"))
+    
+    ' Try to extract the header image
+    On Error Resume Next
+    Dim fso : fso = CreateObject("Scripting.FileSystemObject")
+    Dim imgDir As String : imgDir = docDir & "img"
+    Dim targetPath As String : targetPath = imgDir & "\" & fileName
+    
+    ' Create img directory if it doesn't exist
+    If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
+    
+    ' Try to extract using GraphicProvider
+    Dim graphic : graphic = imageObj.Graphic
+    If Not IsEmpty(graphic) Then
+        Dim graphicProvider : graphicProvider = CreateUnoService("com.sun.star.graphic.GraphicProvider")
+        Dim exportProps(1) As New com.sun.star.beans.PropertyValue
+        exportProps(0).Name = "URL"
+        exportProps(0).Value = ConvertToURL(targetPath)
+        exportProps(1).Name = "MimeType"
+        exportProps(1).Value = "image/png"
+        graphicProvider.storeGraphic(graphic, exportProps())
+    End If
+    On Error GoTo 0
+    
+    ProcessHeaderImage = "![" & altText & "](img/" & fileName & ")" & CHR$(10) & CHR$(10)
 End Function
 
 Function MakeModel(ByRef Comp As Object) As Node
@@ -326,6 +332,9 @@ Sub MakeDocHtmlView(Optional Comp As Variant)
     vHtml.docView = dView
     dView.docTree = MakeModel(doc)
     dView.viewAdapter = vHtml
+    ' Initialize image processing variables
+    dView.imageCounter = 0
+    dView.docPrefix = ""
     dView.props = New Collection
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
@@ -347,6 +356,9 @@ Sub MakeDocHfmView(Optional Comp As Variant)
     vHfm.docView = dView
     dView.docTree = MakeModel(doc)
     dView.viewAdapter = vHfm
+    ' Initialize image processing variables
+    dView.imageCounter = 0
+    dView.docPrefix = ""
     dView.props = New Collection
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
