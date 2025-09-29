@@ -46,62 +46,64 @@ def create_oxt():
     <version value="{EXTENSION_VERSION}" />
     <display-name><name lang="en">{EXTENSION_DISPLAY_NAME}</name></display-name>
 </description>
-"""
+""".replace('\n', '\r\n')
         with open(os.path.join(temp_dir, "description.xml"), "w", encoding="utf-8") as f:
             f.write(description_xml_content)
 
-        # 3. Generate META-INF/manifest.xml
-        manifest_file_entries = '<manifest:file-entry manifest:media-type="application/vnd.sun.xml.uno-description;type=OpenOffice-Extension" manifest:full-path="description.xml"/>\n'
-        manifest_file_entries += f'<manifest:file-entry manifest:media-type="application/vnd.sun.xml.script;type=StarBasic" manifest:full-path="Basic/{LIBRARY_NAME}/script.xlb"/>\n'
-        manifest_file_entries += f'<manifest:file-entry manifest:media-type="application/vnd.sun.xml.script;type=StarBasic" manifest:full-path="Basic/{LIBRARY_NAME}/dialog.xlb"/>\n'
-
-        # 4. Create macro XML files and add to manifest
+        # 3. Prepare manifest entries and create macro XML files
+        manifest_file_entries = ""
         script_xlb_modules = ""
+
         for bas_file in BAS_FILES:
             module_name = os.path.splitext(bas_file)[0]
-            xml_path = f"Basic/{LIBRARY_NAME}/{module_name}.xml"
-            manifest_file_entries += f'<manifest:file-entry manifest:media-type="application/vnd.sun.xml.script;type=StarBasic" manifest:full-path="{xml_path}"/>\n'
             script_xlb_modules += f' <library:module library:name="{module_name}"/>\n'
 
             if os.path.exists(bas_file):
                 with open(bas_file, 'r', encoding='utf-8') as f:
                     bas_content = f.read()
-                
-                # Escape CDATA closing sequence if present in the code
-                bas_content = bas_content.replace("]]>", "]]&gt;")
+            else:
+                print(f"Error: Required source file '{bas_file}' not found. Aborting.")
+                return
 
-                xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+            xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
 <script:module xmlns:script="http://openoffice.org/2000/script" script:name="{module_name}" script:language="StarBasic">
-<script:source-code><![CDATA[{bas_content}]]></script:source-code>
-</script:module>
-"""
-                with open(os.path.join(temp_dir, xml_path), "w", encoding="utf-8") as f:
-                    f.write(xml_content)
-                print(f"Packaged {bas_file} into {xml_path}")
+{bas_content}</script:module>
+""".replace('\n', '\r\n')
+            # The path for the individual module xml
+            module_xml_path = os.path.join(basic_lib_path, f"{module_name}.xml")
+            with open(module_xml_path, "w", encoding="utf-8") as f:
+                f.write(xml_content)
+            print(f"Packaged {bas_file} into Basic/{LIBRARY_NAME}/{module_name}.xml")
 
+        # 4. Generate META-INF/manifest.xml using the collected entries
         manifest_xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE manifest:manifest PUBLIC "-//OpenOffice.org//DTD Manifest 1.0//EN" "Manifest.dtd">
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
-{manifest_file_entries}
+  <manifest:file-entry manifest:media-type="application/vnd.sun.xml.uno-description;type=OpenOffice-Extension"
+                       manifest:full-path="description.xml"/>
+  <manifest:file-entry manifest:media-type="application/vnd.sun.xml.script;type=StarBasic" manifest:full-path="Basic/{LIBRARY_NAME}/script.xlb"/>
+  <manifest:file-entry manifest:media-type="application/vnd.sun.xml.script;type=StarBasic" manifest:full-path="Basic/{LIBRARY_NAME}/dialog.xlb"/>
 </manifest:manifest>
-"""
+""".replace('\n', '\r\n')
         with open(os.path.join(meta_inf_path, "manifest.xml"), "w", encoding="utf-8") as f:
             f.write(manifest_xml_content)
 
         # 5. Create library files (script.xlb and dialog.xlb)
         script_xlb_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE library:library PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "library.dtd">
-<library:library xmlns:library="http://openoffice.org/2000/library" library:name="{LIBRARY_NAME}" library:readonly="true" library:passwordprotected="false">
+<library:library xmlns:library="http://openoffice.org/2000/library" library:name="{LIBRARY_NAME}" library:readonly="false" library:passwordprotected="false">
 {script_xlb_modules}
 </library:library>
-"""
+""".replace('\n', '\r\n')
         with open(os.path.join(basic_lib_path, "script.xlb"), "w", encoding="utf-8") as f:
             f.write(script_xlb_content)
 
         dialog_xlb_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE library:library PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "library.dtd">
-<library:library xmlns:library="http://openoffice.org/2000/library" library:name="{LIBRARY_NAME}" library:readonly="true" library:passwordprotected="false"/>
+<library:library xmlns:library="http://openoffice.org/2000/library" library:name="{LIBRARY_NAME}" library:readonly="false" library:passwordprotected="false"/>
 """
+        dialog_xlb_content = dialog_xlb_content.replace('\n', '\r\n')
         with open(os.path.join(basic_lib_path, "dialog.xlb"), "w", encoding="utf-8") as f:
             f.write(dialog_xlb_content)
 
