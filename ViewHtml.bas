@@ -66,13 +66,23 @@ Function List(ByRef node)
     End If
 End Function
 
-Function InlineImage(ByRef node)
-    InlineImage = "<img alt=""" & node.Title & """ src=""" & _
-        node.Graphic.OriginURL & """ />"
+Function InlineImage(ByRef lo)
+    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, ThisComponent.URL)
+    ' Extract src from markdown format
+    Dim srcStart As Long : srcStart = InStr(imageUrl, "](")
+    Dim srcEnd As Long : srcEnd = InStr(srcStart, imageUrl, ")")
+    Dim src As String : src = Mid(imageUrl, srcStart + 2, srcEnd - srcStart - 2)
+    ' Remove ./ prefix if present
+    If Left(src, 2) = "./" Then src = Mid(src, 3)
+    ' Extract alt text from markdown format
+    Dim altStart As Long : altStart = InStr(imageUrl, "![")
+    Dim altEnd As Long : altEnd = InStr(altStart, imageUrl, "](")
+    Dim altText As String : altText = Mid(imageUrl, altStart + 2, altEnd - altStart - 2)
+    InlineImage = "<img alt=""" & altText & """ src=""" & src & """ />"
 End Function
 
-Function Image(ByRef node)
-    Image =  InlineImage(node) & "<br />" & CHR$(10)
+Function Image(ByRef lo)
+    Image = InlineImage(lo) & "<br />" & CHR$(10)
 End Function
 
 Function Link(ByRef node)
@@ -117,9 +127,37 @@ Function FormatList(ByRef list, ByRef txt, level As Long)
     FormatList = shift & "<li>" & txt & "</li>" & CHR$(10)
 End Function
 
+Function ConvertMarkdownImages(ByRef txt As String) As String
+    Dim result As String : result = txt
+    Dim pos As Long : pos = 1
+    Do While pos <= Len(result)
+        Dim mdStart As Long : mdStart = InStr(pos, result, "![")
+        If mdStart = 0 Then Exit Do
+        Dim mdEnd As Long : mdEnd = InStr(mdStart, result, ")")
+        If mdEnd = 0 Then Exit Do
+        Dim mdImage As String : mdImage = Mid(result, mdStart, mdEnd - mdStart + 1)
+        Dim altStart As Long : altStart = InStr(mdImage, "![")
+        Dim altEnd As Long : altEnd = InStr(altStart, mdImage, "](")
+        Dim srcStart As Long : srcStart = InStr(mdImage, "](")
+        Dim srcEnd As Long : srcEnd = InStr(srcStart, mdImage, ")")
+        If altEnd > 0 And srcEnd > 0 Then
+            Dim altText As String : altText = Mid(mdImage, altStart + 2, altEnd - altStart - 2)
+            Dim src As String : src = Mid(mdImage, srcStart + 2, srcEnd - srcStart - 2)
+            If Left(src, 2) = "./" Then src = Mid(src, 3)
+            Dim htmlImg As String : htmlImg = "<img alt=""" & altText & """ src=""" & src & """ />"
+            result = Left(result, mdStart - 1) & htmlImg & Mid(result, mdEnd + 1)
+            pos = mdStart + Len(htmlImg)
+        Else
+            pos = mdStart + 1
+        End If
+    Loop
+    ConvertMarkdownImages = result
+End Function
+
 Function FormatPara(ByRef txt, level As Long, extra As Long)
     Dim shift As String : shift = String(level * SHIFT_CNT, " ")
-    FormatPara = shift & "<p>" & txt & "</p>" & CHR$(10)
+    Dim convertedTxt As String : convertedTxt = ConvertMarkdownImages(txt)
+    FormatPara = shift & "<p>" & convertedTxt & "</p>" & CHR$(10)
 End Function
 
 Function Formula(ByRef txt As String)
@@ -128,6 +166,17 @@ Function Formula(ByRef txt As String)
     m.vAdapter = New vLatex
     m.vAdapter.mMath = m
     Formula = "$$" & CHR$(10) & m.Get_Formula() & CHR$(10) &  "$$" & CHR$(10)
+End Function
+
+Function Escape_Characters(ByRef txt As String) As String
+    Dim result As String
+    result = txt
+    result = Replace(result, "&", "&amp;")
+    result = Replace(result, "<", "&lt;")
+    result = Replace(result, ">", "&gt;")
+    result = Replace(result, Chr(34), "&quot;")
+    result = Replace(result, "'", "&#39;")
+    Escape_Characters = result
 End Function
 
 Function Section(ByRef nodeSec)

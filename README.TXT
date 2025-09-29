@@ -62,7 +62,7 @@ DocModel.bas, DocView.bas, mMath.bas, ViewHfm.bas, ViewHtml.bas, vLatex.bas
 8. Повторяем пункт 7 для следующих имен модулей (названия не менять!):
 DocView, mMath, ViewHfm, ViewHtml, vLatex, - итого 6 модулей
 9. Выходим из диалога
-10. В IDE слева в панели "Каталог объектов":
+10. В IDE (Tools-> Macros -> Edit Macros) слева в панели "Каталог объектов":
 - раскрываем пункт "Мои макросы и диалоги"
 - раскрываем пункт "DocExport"
 11. Жмем на пункт "DocModel"

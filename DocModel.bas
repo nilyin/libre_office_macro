@@ -339,8 +339,9 @@ Sub MakeDocHtmlView(Optional Comp As Variant)
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
     End With
-    ' Process header and prepend to content
+    ' Process header and convert markdown images to HTML
     Dim headerContent As String : headerContent = ProcessHeader(doc)
+    headerContent = vHtml.ConvertMarkdownImages(headerContent)
     Dim fullContent As String : fullContent = headerContent & dView.MakeView()
     ExportToFile fullContent, doc, ".html"
 End Sub
