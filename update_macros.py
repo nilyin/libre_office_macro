@@ -43,12 +43,15 @@ def update_odt_macros():
                     with open(xml_file_path, 'r', encoding='utf-8') as f:
                         xml_content = f.read()
                     
+                    # Define a replacer function to avoid issues with backslashes in the content
+                    def replacer(match):
+                        return f'{match.group(1)}<![CDATA[{content}]]>{match.group(3)}'
+
                     # Replace content between <script:source-code> tags
                     # The CDATA wrapper is important
                     new_xml_content = re.sub(
                         r'(<script:source-code>)(.*?)(</script:source-code>)',
-                        f'\\1<![CDATA[{content}]]>\\3',
-                        xml_content, flags=re.DOTALL)
+                        replacer, xml_content, flags=re.DOTALL)
                     with open(xml_file_path, 'w', encoding='utf-8') as f:
                         f.write(new_xml_content)
                     print(f"Updated {bas_file} -> {xml_path}")
