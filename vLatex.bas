@@ -41,7 +41,10 @@ Public Function BeginNode(ByRef node As fNode) As String
     Dim s As String : s = ""
     Select Case node.type_
         Case mMath.NodeType("Text")
-            s = "\text{" & Replace(node.name_, "&", "\&") & "} "
+            Dim textContent As String : textContent = node.name_
+            textContent = Replace(textContent, "&", "\&")
+            textContent = Replace(textContent, "#", "")
+            s = "\text{" & textContent & "} "
         Case mMath.NodeType("Key")
             s = ReplaceKey(node)
         Case mMath.NodeType("Group")
@@ -57,7 +60,12 @@ Public Function BeginNode(ByRef node As fNode) As String
             s = "\" & rename(node.name_) & " " ' try to find in rename collection
             GoTo EndWord
 ErrWord:
-            s = node.name_ & " " ' if not found - it's a simple word
+            Dim wordContent As String : wordContent = node.name_
+            If wordContent = "#" Then
+                s = " & "
+            Else
+                s = wordContent & " "
+            End If
 EndWord:
             If Mid(s, 1, 1) = "%" Then s = "\" & Mid(s, 2, Len(s) - 1) & " " ' greece sym
     End Select
@@ -132,10 +140,14 @@ Public Function NodeTune2(ByRef node As fNode) As String
 End Function
 
 Public Function Matrix(ByRef node As fNode) As String
-    Dim n As fNode, s As String : s =  CHR$(10) & _
-    "\begin{matrix} " & CHR$(10) & _
-    " " & Print_(node.children.Item(1)) & CHR$(10) & _
-    "\end{matrix} " & CHR$(10)
+    Dim n As fNode, s As String
+    Dim matrixContent As String : matrixContent = Print_(node.children.Item(1))
+    ' Convert # to & for LaTeX matrix column separators
+    matrixContent = Replace(matrixContent, " # ", " & ")
+    matrixContent = Replace(matrixContent, "#", " & ")
+    ' Convert ## to \\ for LaTeX row separators
+    matrixContent = Replace(matrixContent, " &  & ", " \\\\ ")
+    s = CHR$(10) & "\begin{matrix} " & CHR$(10) & " " & matrixContent & CHR$(10) & "\end{matrix} " & CHR$(10)
     Matrix = s
 End Function
 
