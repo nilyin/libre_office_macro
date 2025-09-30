@@ -27,16 +27,26 @@ Function PrintNodeStyle(ByRef node)
         s = viewAdapter.Code(node)   ' Format as code block
     ElseIf Left(node.name_, 7) = STYLE_HEAD Then
         ' Process heading with potential bookmarks
-        Dim textPortion, enumPortion
-        enumPortion = node.children(1).value.createEnumeration()
-        Do While enumPortion.hasMoreElements()
-            textPortion = enumPortion.nextElement()
-            If textPortion.TextPortionType = "Text" Then
-                s = s & viewAdapter.Head(node)     ' Add heading text
-            ElseIf textPortion.TextPortionType = "Bookmark" Then
-                s = s & viewAdapter.Anchor(textPortion)  ' Add bookmark anchor
+        If node.children.Count > 0 Then
+            Dim textPortion, enumPortion
+            On Error Resume Next
+            enumPortion = node.children(1).value.createEnumeration()
+            If Err.Number = 0 Then
+                Do While enumPortion.hasMoreElements()
+                    textPortion = enumPortion.nextElement()
+                    If textPortion.TextPortionType = "Text" Then
+                        s = s & viewAdapter.Head(node)     ' Add heading text
+                    ElseIf textPortion.TextPortionType = "Bookmark" Then
+                        s = s & viewAdapter.Anchor(textPortion)  ' Add bookmark anchor
+                    End If
+                Loop
+            Else
+                s = s & viewAdapter.Head(node)  ' Fallback to simple heading
             End If
-        Loop
+            On Error GoTo 0
+        Else
+            s = s & viewAdapter.Head(node)  ' Fallback to simple heading
+        End If
     Else
         s = viewAdapter.ParaStyle(node)  ' Default paragraph style
     End If
@@ -125,7 +135,7 @@ Function PrintNodeParaLO(ByRef oPara, level As Long, Optional lineNum As Variant
             If CInt(lineNum) = 0 Then
                 PrintNodeParaLO = viewAdapter.FormatPara(s, level, 0)  ' Code block without extra line break
             ElseIf CInt(lineNum) > 0 Then
-                PrintNodeParaLO = s & CHR$(10)  ' Code line with line break
+                PrintNodeParaLO = s & "  " & CHR$(10)  ' Code line with line break
             Else
                 PrintNodeParaLO = viewAdapter.FormatPara(s, level, 1)  ' Regular paragraph with line break
             End If

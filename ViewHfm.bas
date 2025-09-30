@@ -25,17 +25,33 @@ End Sub
 ' @return: Formatted markdown heading string
 Function Head(ByRef node)
     Dim i : i = Split(node.name_, " ")(1)  ' Extract heading level from node name
-    Dim headingText As String : headingText = node.children(1).value.String
+    Dim headingText As String : headingText = ""
+    
+    ' Safely extract heading text with error handling
+    On Error Resume Next
+    If node.children.Count > 0 Then
+        ' Try different methods to get the text
+        headingText = node.children(1).value.getString()
+        If headingText = "" Then
+            headingText = node.children(1).value.String
+        End If
+    End If
+    On Error GoTo 0
+    
+    ' If still empty, use fallback
+    If headingText = "" Then
+        headingText = "Heading " & i
+    End If
     
     ' Create simple markdown heading (GitHub will auto-generate anchors)
-    Head = CHR$(10) & String(i, "#") & " " & headingText & CHR$(10)
+    Head = CHR$(10) & String(i, "#") & " " & headingText & "  " & CHR$(10)
 End Function
 
 ' Generate markdown blockquote from document node
 ' @param node: Document node containing quote content
 ' @return: Formatted markdown blockquote string
 Function Quote(ByRef node)
-    Quote = "> " & docView.PrintTree(node) & CHR$(10)
+    Quote = "> " & docView.PrintTree(node) & "  " & CHR$(10)
 End Function
 
 ' Generate markdown code block from document node
@@ -52,7 +68,7 @@ Function Code(ByRef node)
     End If
     ' Extract language from node name and format as code block
     Code = "```" & Split(node.name_, "_")(1) & CHR$(10) & _
-        codeContent & "```" & CHR$(10)
+        codeContent & "```" & "  " & CHR$(10)
 End Function
 
 ' Process paragraph style node and return formatted content
@@ -74,7 +90,7 @@ End Function
 ' @return: Formatted markdown image string with alt text and description
 Function Image(ByRef lo)
     Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, ThisComponent.URL)
-    Image = imageUrl & CHR$(10)
+    Image = imageUrl & "  " & CHR$(10)
 End Function
 
 ' Generate inline HTML image tag from LibreOffice image object
@@ -130,7 +146,7 @@ Function Link(ByRef node)
     
     ' Format Table of Contents links without indentation
     If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
-        Link = linkResult & CHR$(10) & CHR$(10)
+        Link = linkResult & "  " & CHR$(10) & "  " & CHR$(10)
     Else
         Link = linkResult
     End If
@@ -218,7 +234,7 @@ Function FormatList(ByRef list, ByRef txt, level As Long)
     Dim lbl As String : lbl = list.ListLabelString  ' Get list marker (number or bullet)
     ' Clean up text and ensure proper line breaks
     Dim cleanTxt As String : cleanTxt = Trim(txt)
-    FormatList = shift & IIf(lbl = "", "-", lbl) & " " & cleanTxt & CHR$(10)
+    FormatList = shift & IIf(lbl = "", "-", lbl) & " " & cleanTxt & "  " & CHR$(10)
 End Function
 
 ' Format paragraph with optional extra line break
@@ -228,7 +244,8 @@ End Function
 ' @return: Formatted paragraph text
 Function FormatPara(ByRef txt, level As Long, extra As Long)
     ' Ensure proper line breaks for markdown formatting
-    FormatPara = txt & CHR$(10)
+    ' Add double spaces before line break for hard line breaks in Markdown
+    FormatPara = txt & "  " & CHR$(10)
 End Function
 
 ' Convert LibreOffice formula to LaTeX format for markdown
@@ -240,7 +257,7 @@ Function Formula(ByRef txt As String)
     m.vAdapter = New vLatex     ' Use LaTeX output adapter
     m.vAdapter.mMath = m        ' Link adapter to math processor
     Dim formulaContent As String : formulaContent = m.Get_Formula()
-    Formula = "$$" & CHR$(10) & formulaContent & CHR$(10) &  "$$" & CHR$(10)
+    Formula = "$$" & "  " & CHR$(10) & formulaContent & "  " & CHR$(10) &  "$$" & "  " & CHR$(10)
 End Function
 
 ' Extract and remove section title from section node
@@ -287,11 +304,11 @@ Function Section(ByRef nodeSec)
        InStr(lowerTitle, "index") > 0 Or InStr(lowerTitle, "table of contents") > 0 Or _
        InStr(lowerTitle, "reference") > 0 Then
         ' Use regular heading for TOC
-        Section = "## " & secTitle & CHR$(10) & CHR$(10) & docView.PrintTree(nodeSec)
+        Section = "## " & secTitle & "  " & CHR$(10) & "  " & CHR$(10) & docView.PrintTree(nodeSec)
     Else
         ' Wrap other sections in spoiler tags for HFM
         Section = "<spoiler title=""" & _
-            secTitle & """>" & CHR$(10) & CHR$(10) & _
-            docView.PrintTree(nodeSec) & "</spoiler>" & CHR$(10)
+            secTitle & """>" & "  " & CHR$(10) & "  " & CHR$(10) & _
+            docView.PrintTree(nodeSec) & "</spoiler>" & "  " & CHR$(10)
     End If
 End Function

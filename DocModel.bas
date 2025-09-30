@@ -231,10 +231,10 @@ Function ProcessHeader(ByRef Comp As Object) As String
                         End If
                     Loop
                     
-                    headerContent = headerContent & CHR$(10)
+                    headerContent = headerContent & "  " & CHR$(10)
                 End If
             Loop
-            If headerContent <> "" Then headerContent = headerContent & CHR$(10)
+            If headerContent <> "" Then headerContent = headerContent & "  " & CHR$(10)
         End If
     End If
     
@@ -258,7 +258,7 @@ Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
     If imageObj.HyperLinkURL <> "" Then
         If Left(LCase(imageObj.HyperLinkURL), 4) = "http" Then
             hasExternalLink = True
-            ProcessHeaderImage = "![" & altText & "](" & imageObj.HyperLinkURL & ")" & CHR$(10) & CHR$(10)
+            ProcessHeaderImage = "![" & altText & "](" & imageObj.HyperLinkURL & ")" & "  " & CHR$(10) & "  " & CHR$(10)
         End If
     End If
     On Error GoTo 0
@@ -269,7 +269,7 @@ Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
     
     ' Check if it's a remote URL in the image source itself
     If imageName <> "" And Left(LCase(imageName), 4) = "http" Then
-        ProcessHeaderImage = "![" & altText & "](" & imageName & ")" & CHR$(10) & CHR$(10)
+        ProcessHeaderImage = "![" & altText & "](" & imageName & ")" & "  " & CHR$(10) & "  " & CHR$(10)
         Exit Function
     End If
     
@@ -299,7 +299,7 @@ Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
     End If
     On Error GoTo 0
     
-    ProcessHeaderImage = "![" & altText & "](img/" & fileName & ")" & CHR$(10) & CHR$(10)
+    ProcessHeaderImage = "![" & altText & "](img/" & fileName & ")" & "  " & CHR$(10) & "  " & CHR$(10)
 End Function
 
 Function MakeModel(ByRef Comp As Object) As Node
