@@ -20,6 +20,48 @@ Private Sub Class_Initialize()
     fontStyles.Add(Array("~~", "~~"), "Strikeout")   ' Strikethrough markers
 End Sub
 
+' Generate TOC anchor based on hybrid approach
+' @param headingText: The heading text to convert to anchor
+' @return: Anchor string for TOC links
+Private Function GenerateTOCAnchor(ByRef headingText As String) As String
+    Dim cleanText As String : cleanText = LCase(headingText)
+    
+    ' Extract numbering part (everything before first space)
+    Dim spacePos As Integer : spacePos = InStr(cleanText, " ")
+    Dim numbering As String : numbering = ""
+    Dim titleText As String : titleText = cleanText
+    
+    If spacePos > 0 Then
+        numbering = Left(cleanText, spacePos - 1)
+        titleText = Mid(cleanText, spacePos + 1)
+    End If
+    
+    ' Clean title text: remove dots and clean up
+    Dim cleanTitle As String : cleanTitle = Replace(titleText, ".", "")
+    cleanTitle = Replace(cleanTitle, " ", "-")
+    cleanTitle = Replace(cleanTitle, ",", "")
+    cleanTitle = Replace(cleanTitle, "(", "")
+    cleanTitle = Replace(cleanTitle, ")", "")
+    cleanTitle = Replace(cleanTitle, ":", "")
+    ' Remove consecutive dashes
+    Do While InStr(cleanTitle, "--") > 0
+        cleanTitle = Replace(cleanTitle, "--", "-")
+    Loop
+    
+    ' Check if numbering contains dots (sub-chapter) or not (major chapter)
+    Dim anchorResult As String
+    If InStr(numbering, ".") > 0 Then
+        ' Sub-chapter: use HTML anchor format (ch + numbers without dots)
+        anchorResult = "ch" & Replace(numbering, ".", "-")
+        If cleanTitle <> "" Then anchorResult = anchorResult & "-" & cleanTitle
+    Else
+        ' Major chapter: use standard markdown anchor
+        anchorResult = numbering
+        If cleanTitle <> "" Then anchorResult = anchorResult & "-" & cleanTitle
+    End If
+    GenerateTOCAnchor = anchorResult
+End Function
+
 ' Generate markdown heading from document heading node
 ' @param node: Document node containing heading information
 ' @return: Formatted markdown heading string
@@ -43,8 +85,23 @@ Function Head(ByRef node)
         headingText = "Heading " & i
     End If
     
-    ' Create simple markdown heading (GitHub will auto-generate anchors)
-    Head = CHR$(10) & String(i, "#") & " " & headingText & "  " & CHR$(10)
+    ' Generate heading with HTML anchor for sub-chapters (hybrid approach)
+    Dim headingOutput As String
+    ' Extract numbering part to check for dots
+    Dim spacePos As Integer : spacePos = InStr(headingText, " ")
+    Dim numbering As String : numbering = ""
+    If spacePos > 0 Then numbering = Left(headingText, spacePos - 1)
+    
+    If InStr(numbering, ".") > 0 Then
+        ' Sub-chapter: add HTML anchor
+        Dim anchor As String : anchor = GenerateTOCAnchor(headingText)
+        headingOutput = CHR$(10) & "# <a id=""" & anchor & """></a>" & headingText & "  " & CHR$(10)
+    Else
+        ' Major chapter: use simple markdown heading
+        headingOutput = CHR$(10) & String(i, "#") & " " & headingText & "  " & CHR$(10)
+    End If
+    
+    Head = headingOutput
 End Function
 
 ' Generate markdown blockquote from document node
@@ -125,19 +182,8 @@ Function Link(ByRef node)
         Dim anchor As String : anchor = Mid(url, InStr(url, "#") + 1)
         ' Clean up LibreOffice anchor names for GitHub markdown
         If InStr(anchor, "__RefHeading") > 0 Then
-            ' Convert to GitHub-style anchor based on text content
-            ' GitHub converts: "2.1. Ссылки" -> "21-ссылки"
-            anchor = LCase(t)
-            ' Replace dots with dashes, then spaces with dashes
-            anchor = Replace(anchor, ".", "-")
-            anchor = Replace(anchor, " ", "-")
-            anchor = Replace(anchor, ",", "")
-            anchor = Replace(anchor, "(", "")
-            anchor = Replace(anchor, ")", "")
-            ' Remove consecutive dashes
-            Do While InStr(anchor, "--") > 0
-                anchor = Replace(anchor, "--", "-")
-            Loop
+            ' Hybrid approach for TOC links
+            anchor = GenerateTOCAnchor(t)
         End If
         linkResult = "[" & t & "](#" & anchor & ")"
     Else
