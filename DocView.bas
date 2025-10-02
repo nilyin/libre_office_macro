@@ -262,15 +262,25 @@ Private Function GenerateDocPrefix(ByRef docURL As String) As String
     GenerateDocPrefix = prefix
 End Function
 
+' Generate image folder name from document URL
+' @param docURL: Document URL
+' @return: Image folder name with pattern "img_" + source filename
+Private Function GenerateImageFolderName(ByRef docURL As String) As String
+    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\") + 1)
+    fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
+    GenerateImageFolderName = "img_" & fileName
+End Function
+
 ' Extract and save image from LibreOffice graphic object
 ' @param imageObj: LibreOffice image object
 ' @param targetDir: Target directory path
 ' @param fileName: Target filename
 ' @return: True if extraction successful
-Private Function ExtractImageFile(ByRef imageObj, ByRef targetDir As String, ByRef fileName As String) As Boolean
+Private Function ExtractImageFile(ByRef imageObj, ByRef targetDir As String, ByRef fileName As String, ByRef docURL As String) As Boolean
     On Error Resume Next
     Dim fso : fso = CreateObject("Scripting.FileSystemObject")
-    Dim imgDir As String : imgDir = targetDir & "img"
+    Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
+    Dim imgDir As String : imgDir = targetDir & imgFolderName
     Dim targetPath As String : targetPath = imgDir & "\" & fileName
     
     ' Create img directory if it doesn't exist
@@ -303,10 +313,11 @@ End Function
 ' @param targetDir: Target directory path
 ' @param fileName: Target filename
 ' @return: True if copy successful
-Private Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As String, ByRef fileName As String) As Boolean
+Private Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As String, ByRef fileName As String, ByRef docURL As String) As Boolean
     On Error Resume Next
     Dim fso : fso = CreateObject("Scripting.FileSystemObject")
-    Dim imgDir As String : imgDir = targetDir & "img"
+    Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
+    Dim imgDir As String : imgDir = targetDir & imgFolderName
     Dim targetPath As String : targetPath = imgDir & "\" & fileName
     
     ' Create img directory if it doesn't exist
@@ -381,15 +392,17 @@ Public Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
     ' Try to extract embedded image first, then try copying external file
     Dim success As Boolean : success = False
     If Not IsEmpty(imageObj.Graphic) Then
-        success = ExtractImageFile(imageObj, docDir, fileName)
+        success = ExtractImageFile(imageObj, docDir, fileName, docURL)
     End If
     
     If Not success And imageName <> "" Then
-        success = CopyImageFile(imageName, docDir, fileName)
+        success = CopyImageFile(imageName, docDir, fileName, docURL)
     End If
     
+    ' Generate dynamic folder name for markdown reference
+    Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
     ' Always return the markdown reference, even if extraction failed
-    ProcessImage = "![" & altText & "](img/" & fileName & ")"
+    ProcessImage = "![" & altText & "](" & imgFolderName & "/" & fileName & ")"
 End Function
 
 ' Generate the complete formatted output from document tree

@@ -244,6 +244,15 @@ End Function
 
 
 
+' Generate image folder name from document URL
+' @param docURL: Document URL
+' @return: Image folder name with pattern "img_" + source filename
+Private Function GenerateImageFolderName(ByRef docURL As String) As String
+    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\") + 1)
+    fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
+    GenerateImageFolderName = "img_" & fileName
+End Function
+
 Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
     Dim altText As String : altText = IIf(imageObj.Title = "", "logo", imageObj.Title)
     Dim imageName As String
@@ -280,7 +289,8 @@ Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
     ' Try to extract the header image
     On Error Resume Next
     Dim fso : fso = CreateObject("Scripting.FileSystemObject")
-    Dim imgDir As String : imgDir = docDir & "img"
+    Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
+    Dim imgDir As String : imgDir = docDir & imgFolderName
     Dim targetPath As String : targetPath = imgDir & "\" & fileName
     
     ' Create img directory if it doesn't exist
@@ -299,7 +309,7 @@ Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
     End If
     On Error GoTo 0
     
-    ProcessHeaderImage = "![" & altText & "](img/" & fileName & ")" & "  " & CHR$(10) & "  " & CHR$(10)
+    ProcessHeaderImage = "![" & altText & "](" & imgFolderName & "/" & fileName & ")" & "  " & CHR$(10) & "  " & CHR$(10)
 End Function
 
 Function MakeModel(ByRef Comp As Object) As Node
@@ -367,7 +377,7 @@ Sub MakeDocHfmView(Optional Comp As Variant)
     ' Process header and prepend to content
     Dim headerContent As String : headerContent = ProcessHeader(doc)
     Dim fullContent As String : fullContent = headerContent & dView.MakeView()
-    ExportToFile fullContent, doc, "_hfm.md"
+    ExportToFile fullContent, doc, ".md"
 End Sub
 
 ' "C:\Program Files\LibreOffice\program\soffice.exe" --invisible --nofirststartwizard --headless --norestore macro:///DocExport.DocModel.ExportDir("D:\cpp\habr\002-hfm",0)

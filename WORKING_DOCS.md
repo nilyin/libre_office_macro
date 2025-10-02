@@ -331,7 +331,7 @@ Applied to all embedded images to ensure markdown compatibility:
 - **Lowercase conversion**: All filenames converted to lowercase
 - **Bracket removal**: `(` replaced with `-`, `)` removed entirely
 - **Space replacement**: Spaces replaced with `-` characters
-- **Path format**: Uses relative path `./img/filename.png`
+- **Path format**: Uses relative path `img_{document_name}/filename.png`
 
 **Example transformations**:
 - `Image(1).PNG` → `image-1.png`
@@ -381,11 +381,12 @@ End Function
 ```
 document-folder/
 ├── document.odt
-├── document_hfm.md
-└── img/
-    ├── header-image.png
-    ├── diagram-1.jpg
-    └── photo-final.gif
+├── document.md
+├── document.html
+└── img_document/
+    ├── header-logo.png
+    ├── document_01.png
+    └── document_02.jpg
 ```
 
 ### Error Handling
@@ -410,6 +411,65 @@ LibreOffice Image Object
     ├── Copy to ./img/ folder
     └── Generate relative path reference
 ```
+
+## Filename and Directory Naming Logic
+
+### Output File Naming
+Generated files use the same base name as the source ODT file with appropriate extensions:
+
+**Pattern**: `{source_filename_without_extension}.{extension}`
+
+**Examples**:
+- `my_document.odt` → `my_document.md` and `my_document.html`
+- `article-draft.odt` → `article-draft.md` and `article-draft.html`
+- `report_2024.odt` → `report_2024.md` and `report_2024.html`
+
+**Implementation**: `ExportToFile()` function in DocModel.bas
+```basic
+' HFM export uses .md extension
+ExportToFile fullContent, doc, ".md"
+
+' HTML export uses .html extension  
+ExportToFile fullContent, doc, ".html"
+```
+
+### Image Directory Naming
+Each ODT file generates its own uniquely named image directory to prevent conflicts:
+
+**Pattern**: `img_{source_filename_without_extension}`
+
+**Examples**:
+- `my_document.odt` → `img_my_document/`
+- `article-draft.odt` → `img_article-draft/`
+- `report_2024.odt` → `img_report_2024/`
+
+**Implementation**: `GenerateImageFolderName()` function
+```basic
+Private Function GenerateImageFolderName(ByRef docURL As String) As String
+    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\\") + 1)
+    fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
+    GenerateImageFolderName = "img_" & fileName
+End Function
+```
+
+### Image Reference Generation
+Markdown and HTML references use the dynamic folder names:
+
+**Markdown format**:
+```markdown
+![alt-text](img_document/filename.png)
+```
+
+**HTML format**:
+```html
+<img alt="alt-text" src="img_document/filename.png" />
+```
+
+### Benefits of Dynamic Naming
+- **Conflict Prevention**: Multiple ODT files in same directory won't overwrite each other's images
+- **Organization**: Clear association between source file and its generated assets
+- **Batch Processing**: Safe to process multiple documents simultaneously
+- **Cleanup**: Easy to identify and remove assets for specific documents
 
 ### Future Enhancements
 - **Image optimization**: Resize large images for web use
