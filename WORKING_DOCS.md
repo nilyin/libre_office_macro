@@ -477,3 +477,62 @@ Markdown and HTML references use the dynamic folder names:
 - **Batch processing**: Handle multiple images efficiently
 - **Error reporting**: Detailed logging of image processing issues
 - **Alternative text generation**: Auto-generate alt text from image content analysis
+
+## Cross-Platform Compatibility
+
+### GetPathSeparator Function
+**Location**: `Utils.bas`
+**Purpose**: Provides cross-platform path separator detection for Windows and Unix/Linux systems
+
+```basic
+Function GetPathSeparator() As String
+    ' Check if running on Windows by testing for Windows-specific environment
+    On Error Resume Next
+    Dim testPath As String : testPath = Environ("WINDIR")
+    If Err.Number = 0 And testPath <> "" Then
+        GetPathSeparator = "\"  ' Windows
+    Else
+        GetPathSeparator = "/"  ' Unix/Linux/macOS
+    End If
+    On Error GoTo 0
+End Function
+```
+
+### Platform Support
+**Supported Operating Systems:**
+- **Windows**: Uses backslash (`\`) path separators
+- **Linux/Unix**: Uses forward slash (`/`) path separators
+- **macOS**: Uses forward slash (`/`) path separators
+
+**Detection Method**: Checks for `WINDIR` environment variable to identify Windows systems
+
+### Usage in Macros
+All path operations in the following functions now use `GetPathSeparator()`:
+- `ExportDir()` - Batch processing directory operations
+- `ProcessHeaderImage()` - Header image extraction paths
+- `GenerateDocPrefix()` - Document filename parsing
+- `GenerateImageFolderName()` - Image directory creation
+- `ExtractImageFile()` - Image file extraction paths
+- `CopyImageFile()` - Image file copying operations
+- `ProcessImage()` - General image processing paths
+
+### Command Line Usage
+**Windows:**
+```cmd
+"C:\Program Files\LibreOffice\program\soffice.exe" --invisible --nofirststartwizard --headless --norestore "macro:///DocExport.DocModel.ExportDir(\"D:\\odt\",1)"
+```
+
+**Linux/Unix:**
+```bash
+soffice --invisible --nofirststartwizard --headless --norestore "macro:///DocExport.DocModel.ExportDir(\"/path/to/odt\",1)"
+```
+
+**CI/CD Integration Example:**
+```bash
+# Linux bash script with timeout
+if timeout 300 soffice --invisible --nofirststartwizard --headless --norestore "macro:///DocExport.DocModel.ExportDir(\"$temp_odt_dir\",1)"; then
+    echo "✓ LibreOffice macro execution completed"
+else
+    echo "✗ LibreOffice macro execution failed or timed out"
+fi
+```

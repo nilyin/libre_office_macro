@@ -45,3 +45,17 @@ Sub Main
     s = "<?xml version=""1.0"" encoding=""UTF-8""?>"      ' Test XML string
     s = Escape_Characters(s)  ' Test character escaping
 End Sub
+
+' Get platform-specific path separator
+' @return: "\" for Windows, "/" for Unix/Linux/macOS
+Function GetPathSeparator() As String
+    ' Check if running on Windows by testing for Windows-specific environment
+    On Error Resume Next
+    Dim testPath As String : testPath = Environ("WINDIR")
+    If Err.Number = 0 And testPath <> "" Then
+        GetPathSeparator = "\"  ' Windows
+    Else
+        GetPathSeparator = "/"  ' Unix/Linux/macOS
+    End If
+    On Error GoTo 0
+End Function

@@ -284,14 +284,14 @@ Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
     
     ' For header images, use a simple naming scheme (only extract first header image)
     Dim fileName As String : fileName = "header-logo.png"
-    Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\"))
+    Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), GetPathSeparator()))
     
     ' Try to extract the header image
     On Error Resume Next
     Dim fso : fso = CreateObject("Scripting.FileSystemObject")
     Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
     Dim imgDir As String : imgDir = docDir & imgFolderName
-    Dim targetPath As String : targetPath = imgDir & "\" & fileName
+    Dim targetPath As String : targetPath = imgDir & GetPathSeparator() & fileName
     
     ' Create img directory if it doesn't exist
     If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
@@ -391,9 +391,9 @@ Sub ExportDir(Folder As String, Optional Hfm As Variant)
     Props(0).NAME = "Hidden" 
     Props(0).Value = True 
     Dim Comp As Object
-    Dim url, fname As String : fname = Dir$(Folder + "\" + "*.odt", 0)    
+    Dim url, fname As String : fname = Dir$(Folder + GetPathSeparator() + "*.odt", 0)    
     Do
-        url = ConvertToUrl(Folder + "\" + fname)
+        url = ConvertToUrl(Folder + GetPathSeparator() + fname)
         Comp = StarDesktop.loadComponentFromURL(url, "_blank", 0, Props)
         If useHfm Then
             MakeDocHfmView Comp

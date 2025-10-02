@@ -242,7 +242,7 @@ End Function
 ' @param docURL: Document URL
 ' @return: Prefix string for image names
 Private Function GenerateDocPrefix(ByRef docURL As String) As String
-    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\") + 1)
+    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), GetPathSeparator()) + 1)
     fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
     
     ' Split by separators and take first 4 chars from each word
@@ -266,7 +266,7 @@ End Function
 ' @param docURL: Document URL
 ' @return: Image folder name with pattern "img_" + source filename
 Private Function GenerateImageFolderName(ByRef docURL As String) As String
-    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\") + 1)
+    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), GetPathSeparator()) + 1)
     fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
     GenerateImageFolderName = "img_" & fileName
 End Function
@@ -281,7 +281,7 @@ Private Function ExtractImageFile(ByRef imageObj, ByRef targetDir As String, ByR
     Dim fso : fso = CreateObject("Scripting.FileSystemObject")
     Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
     Dim imgDir As String : imgDir = targetDir & imgFolderName
-    Dim targetPath As String : targetPath = imgDir & "\" & fileName
+    Dim targetPath As String : targetPath = imgDir & GetPathSeparator() & fileName
     
     ' Create img directory if it doesn't exist
     If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
@@ -318,7 +318,7 @@ Private Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As Str
     Dim fso : fso = CreateObject("Scripting.FileSystemObject")
     Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
     Dim imgDir As String : imgDir = targetDir & imgFolderName
-    Dim targetPath As String : targetPath = imgDir & "\" & fileName
+    Dim targetPath As String : targetPath = imgDir & GetPathSeparator() & fileName
     
     ' Create img directory if it doesn't exist
     If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
@@ -387,7 +387,7 @@ Public Function ProcessImage(ByRef imageObj, ByRef docURL As String) As String
         fileName = docPrefix & "_" & Format_Num(imageCounter) & ".png"
     End If
     
-    Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\"))
+    Dim docDir As String : docDir = Left(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), GetPathSeparator()))
     
     ' Try to extract embedded image first, then try copying external file
     Dim success As Boolean : success = False
