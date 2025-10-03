@@ -248,7 +248,7 @@ End Function
 ' @param docURL: Document URL
 ' @return: Image folder name with pattern "img_" + source filename
 Private Function GenerateImageFolderName(ByRef docURL As String) As String
-    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), "\") + 1)
+    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), GetPathSeparator()) + 1)
     fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
     GenerateImageFolderName = "img_" & fileName
 End Function
@@ -345,6 +345,7 @@ Sub MakeDocHtmlView(Optional Comp As Variant)
     ' Initialize image processing variables
     dView.imageCounter = 0
     dView.docPrefix = ""
+    dView.docURL = doc.URL
     dView.props = New Collection
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
@@ -370,6 +371,7 @@ Sub MakeDocHfmView(Optional Comp As Variant)
     ' Initialize image processing variables
     dView.imageCounter = 0
     dView.docPrefix = ""
+    dView.docURL = doc.URL
     dView.props = New Collection
     With dView.props
         .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n

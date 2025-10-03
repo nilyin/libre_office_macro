@@ -146,7 +146,7 @@ End Function
 ' @param lo: LibreOffice image object
 ' @return: Formatted markdown image string with alt text and description
 Function Image(ByRef lo)
-    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, ThisComponent.URL)
+    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, docView.docURL)
     Image = imageUrl & "  " & CHR$(10)
 End Function
 
@@ -154,7 +154,7 @@ End Function
 ' @param lo: LibreOffice image object
 ' @return: HTML img tag with inline attribute
 Function InlineImage(ByRef lo)
-    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, ThisComponent.URL)
+    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, docView.docURL)
     ' Extract src from markdown format
     Dim srcStart As Long : srcStart = InStr(imageUrl, "](")
     Dim srcEnd As Long : srcEnd = InStr(srcStart, imageUrl, ")")

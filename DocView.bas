@@ -14,6 +14,7 @@ Public viewAdapter              ' Output format adapter (HFM, HTML, etc.)
 Public props                    ' Properties collection for formatting options
 Public imageCounter As Long      ' Counter for image naming
 Public docPrefix As String       ' Document name prefix for image naming
+Public docURL As String          ' Document URL for image processing
 
 ' Process document node based on its style type
 ' @param node: Document node with style information

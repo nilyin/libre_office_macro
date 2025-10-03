@@ -67,7 +67,7 @@ Function List(ByRef node)
 End Function
 
 Function InlineImage(ByRef lo)
-    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, ThisComponent.URL)
+    Dim imageUrl As String : imageUrl = docView.ProcessImage(lo, docView.docURL)
     ' Extract src from markdown format
     Dim srcStart As Long : srcStart = InStr(imageUrl, "](")
     Dim srcEnd As Long : srcEnd = InStr(srcStart, imageUrl, ")")
