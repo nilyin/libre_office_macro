@@ -342,15 +342,13 @@ Sub MakeDocHtmlView(Optional Comp As Variant)
     vHtml.docView = dView
     dView.docTree = MakeModel(doc)
     dView.viewAdapter = vHtml
-    ' Initialize image processing variables
     dView.imageCounter = 0
     dView.docPrefix = ""
     dView.docURL = doc.URL
     dView.props = New Collection
     With dView.props
-        .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
+        .Add(CODE_LINE_NUM, "CodeLineNum")
     End With
-    ' Process header and convert markdown images to HTML
     Dim headerContent As String : headerContent = ProcessHeader(doc)
     headerContent = vHtml.ConvertMarkdownImages(headerContent)
     Dim fullContent As String : fullContent = headerContent & dView.MakeView()
@@ -368,15 +366,13 @@ Sub MakeDocHfmView(Optional Comp As Variant)
     vHfm.docView = dView
     dView.docTree = MakeModel(doc)
     dView.viewAdapter = vHfm
-    ' Initialize image processing variables
     dView.imageCounter = 0
     dView.docPrefix = ""
     dView.docURL = doc.URL
     dView.props = New Collection
     With dView.props
-        .Add(CODE_LINE_NUM, "CodeLineNum") ' Enumerate code lines 1, 2, 3 ... n
+        .Add(CODE_LINE_NUM, "CodeLineNum")
     End With
-    ' Process header and prepend to content
     Dim headerContent As String : headerContent = ProcessHeader(doc)
     Dim fullContent As String : fullContent = headerContent & dView.MakeView()
     ExportToFile fullContent, doc, ".md"

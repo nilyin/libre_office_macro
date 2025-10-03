@@ -536,3 +536,62 @@ else
     echo "✗ LibreOffice macro execution failed or timed out"
 fi
 ```
+
+
+## Headless Batch Processing
+
+### Document URL Handling
+**Critical Issue**: In headless mode, `ThisComponent.URL` doesn't correctly reference the loaded document.
+
+**Solution**: Pass document URL through the processing chain:
+1. Load document: `Comp = StarDesktop.loadComponentFromURL(url, "_blank", 0, Props)`
+2. Store URL: `dView.docURL = doc.URL` (in `MakeDocHfmView`/`MakeDocHtmlView`)
+3. Use stored URL: `docView.ProcessImage(lo, docView.docURL)` (in view adapters)
+
+**Modified Files:**
+- `DocView.bas`: Added `Public docURL As String` property
+- `DocModel.bas`: Initialize `dView.docURL = doc.URL` in export functions
+- `ViewHfm.bas`: Use `docView.docURL` instead of `ThisComponent.URL`
+- `ViewHtml.bas`: Use `docView.docURL` instead of `ThisComponent.URL`
+
+### Cross-Platform Path Handling
+
+#### Problem Solved
+Initial implementation used hardcoded backslashes (`\`) which caused incorrect folder naming on Linux:
+- **Expected**: `img_RU.ECO.00101-01_90_001-0/`
+- **Actual (broken)**: `img_/tmp/tmp.9Wgb8RyaaC/RU.ECO.00101-01_90_001-0/`
+
+#### Solution
+All path operations now use `GetPathSeparator()` for dynamic path separator selection.
+
+### Testing Scenarios
+
+#### Individual File Export
+- **Windows**: `C:\Documents\report.odt` → `C:\Documents\report.md` + `img_report/`
+- **Linux**: `/home/user/report.odt` → `/home/user/report.md` + `img_report/`
+- **macOS**: `/Users/user/report.odt` → `/Users/user/report.md` + `img_report/`
+
+#### Batch Export (ExportDir)
+- **Windows**: `macro:///DocExport.DocModel.ExportDir("D:\\odt",1)`
+- **Linux**: `macro:///DocExport.DocModel.ExportDir("/tmp/odt",1)`
+- **macOS**: `macro:///DocExport.DocModel.ExportDir("/Users/user/odt",1)`
+
+#### Complex Filenames
+All platforms correctly handle filenames with special characters:
+- `RU.ECO.00101-01_90_001-0.odt` → `img_RU.ECO.00101-01_90_001-0/`
+- `my-document_v2.1.odt` → `img_my-document_v2.1/`
+- `report (final).odt` → `img_report (final)/`
+
+### Troubleshooting
+
+**Issue**: Image folders created with wrong names on Linux
+- **Cause**: Hardcoded path separators
+- **Solution**: Ensure all functions use `GetPathSeparator()`
+
+**Issue**: `ThisComponent` undefined in headless mode
+- **Cause**: No active UI component in headless operation
+- **Solution**: Use `doc.URL` from loaded document, stored in `dView.docURL`
+
+**Issue**: Macro not found in headless mode
+- **Cause**: Extension not installed globally
+- **Solution**: Install with `unopkg add --shared DocExport.oxt`

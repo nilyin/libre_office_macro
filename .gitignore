@@ -1,4 +1,13 @@
 logs
 logs/*
 .DS_Store
+
+# LibreOffice lock files
+.~lock.*#
 *.odt#
+
+# Backup files
+*~
+*.bak
+*.swp
+*.swo
