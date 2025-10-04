@@ -5,6 +5,14 @@ Option VBASupport 1
 Const STYLE_HEAD = "Heading"  ' Prefix for heading paragraph styles
 Const CODE_LINE_NUM = True    ' Enable line numbering in code blocks
 
+' File logging function for headless mode debugging
+Sub LogToFile(message As String)
+    Dim fileNum As Integer : fileNum = FreeFile
+    Open "/tmp/macro_debug.log" For Append As #fileNum
+    Print #fileNum, Now() & " - " & message
+    Close #fileNum
+End Sub
+
 ' Enumeration for different types of document nodes
 Enum NodeType
     Section = 1    ' Document sections
@@ -160,7 +168,7 @@ continue:
                 .value = curPara
             End With
             If curPara.NumberingIsNumber And _
-                Left(curPara.ParaStyleName, 7) <> STYLE_HEAD Then
+                (Len(curPara.ParaStyleName) < 7 Or Left(curPara.ParaStyleName, 7) <> STYLE_HEAD) Then
                 Dim nodeList As Node
                 nodeList = GetNodeList(nodeStyle, curPara)
                 nodePara.level = nodeList.level + 1
@@ -178,7 +186,16 @@ End Sub
 Sub ExportToFile (ByRef text_ As String, Comp As Object, Optional suffix As Variant)
     If IsMissing(suffix) Then suffix = "_export.txt"
     Dim FileNo As Integer, Filename As String
-    Filename = convertToURL(replace(convertFromURL(Comp.URL), ".odt", suffix))
+    Dim docPath As String : docPath = convertFromURL(Comp.URL)
+    ' Handle both .odt and .fodt extensions
+    If Right(LCase(docPath), 5) = ".fodt" Then
+        docPath = Left(docPath, Len(docPath) - 5) & suffix
+    ElseIf Right(LCase(docPath), 4) = ".odt" Then
+        docPath = Left(docPath, Len(docPath) - 4) & suffix
+    Else
+        docPath = docPath & suffix
+    End If
+    Filename = convertToURL(docPath)
 	FileNo = Freefile
 	Open Filename For Output As #FileNo
 	Print #FileNo, text_
@@ -244,13 +261,50 @@ End Function
 
 
 
-' Generate image folder name from document URL
+' Generate image folder name from document URL with robust extraction
 ' @param docURL: Document URL
 ' @return: Image folder name with pattern "img_" + source filename
 Private Function GenerateImageFolderName(ByRef docURL As String) As String
-    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), GetPathSeparator()) + 1)
-    fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
+    On Error Resume Next
+    
+    ' Enhanced filename extraction with multiple fallback methods
+    Dim fileName As String
+    
+    ' Method 1: Standard ConvertFromURL
+    fileName = ConvertFromURL(docURL)
+    If fileName <> "" Then
+        fileName = Mid(fileName, InStrRev(fileName, GetPathSeparator()) + 1)
+    End If
+    
+    ' Method 2: Direct URL parsing if ConvertFromURL fails
+    If fileName = "" Then
+        fileName = docURL
+        If InStr(fileName, "/") > 0 Then
+            fileName = Mid(fileName, InStrRev(fileName, "/") + 1)
+        End If
+        If InStr(fileName, "\") > 0 Then
+            fileName = Mid(fileName, InStrRev(fileName, "\") + 1)
+        End If
+    End If
+    
+    ' Method 3: Extract from file:// URL format
+    If fileName = "" And Left(docURL, 7) = "file://" Then
+        fileName = Mid(docURL, 8)
+        fileName = Replace(fileName, "/", GetPathSeparator())
+        fileName = Mid(fileName, InStrRev(fileName, GetPathSeparator()) + 1)
+    End If
+    
+    ' Remove extension and create folder name
+    Dim dotPos As Long : dotPos = InStrRev(fileName, ".")
+    If dotPos > 1 Then
+        fileName = Left(fileName, dotPos - 1)
+    End If
+    
+    ' Fallback to generic name if all methods fail
+    If fileName = "" Then fileName = "document"
+    
     GenerateImageFolderName = "img_" & fileName
+    On Error GoTo 0
 End Function
 
 Function ProcessHeaderImage(ByRef imageObj, ByRef docURL As String) As String
@@ -384,22 +438,222 @@ Sub ExportDir(Folder As String, Optional Hfm As Variant)
     If Not IsMissing(Hfm) Then
         If IsNumeric(Hfm) Then useHfm = CBool(Hfm)
         If VarType(Hfm) = vbBoolean Then useHfm = Hfm
-    End If  
-    Dim Props(0) as New com.sun.star.beans.PropertyValue
-    Props(0).NAME = "Hidden" 
-    Props(0).Value = True 
-    Dim Comp As Object
-    Dim url, fname As String : fname = Dir$(Folder + GetPathSeparator() + "*.odt", 0)    
-    Do
-        url = ConvertToUrl(Folder + GetPathSeparator() + fname)
-        Comp = StarDesktop.loadComponentFromURL(url, "_blank", 0, Props)
-        If useHfm Then
-            MakeDocHfmView Comp
-        Else
-            MakeDocHtmlView Comp
-        End If
-        fname = Dir$
-        call Comp.close(True)
-    Loop Until fname = ""
+    End If
+    
+    ' Enhanced logging
+    Dim logFile As String : logFile = Folder & GetPathSeparator() & "conversion.log"
+    LogDebug "=== LibreOffice Conversion Started ===", logFile
+    LogDebug "Folder: " & Folder, logFile
+    LogDebug "HFM Mode: " & useHfm, logFile
+    LogDebug "Path Separator: " & GetPathSeparator(), logFile
+    
+    ' Get ODT files using robust method
+    Dim fileCount As Long : fileCount = GetODTFiles(Folder)
+    LogDebug "ODT Files Found: " & fileCount, logFile
+    
+    If fileCount > 0 Then
+        ' Get actual file list
+        Dim odtFiles : odtFiles = GetODTFileList(Folder)
+        Dim Props(0) As New com.sun.star.beans.PropertyValue
+        Props(0).Name = "Hidden"
+        Props(0).Value = True
+        
+        Dim Comp As Object
+        Dim i As Long
+        For i = 0 To fileCount - 1
+            Dim filePath As String : filePath = odtFiles(i)
+            LogDebug "Processing: " & filePath, logFile
+            
+            Dim url As String : url = ConvertToURL(filePath)
+            LogDebug "URL: " & url, logFile
+            
+            On Error Resume Next
+            Comp = StarDesktop.loadComponentFromURL(url, "_blank", 0, Props)
+            If Err.Number = 0 And Not IsEmpty(Comp) Then
+                LogDebug "Document loaded successfully", logFile
+                
+                If useHfm Then
+                    MakeDocHfmView Comp
+                    LogDebug "HFM conversion completed", logFile
+                Else
+                    MakeDocHtmlView Comp
+                    LogDebug "HTML conversion completed", logFile
+                End If
+                
+                Comp.close(True)
+                LogDebug "Document closed", logFile
+            Else
+                LogDebug "ERROR: Failed to load document - " & Err.Description, logFile
+            End If
+            On Error GoTo 0
+        Next
+    Else
+        LogDebug "ERROR: No ODT files found", logFile
+    End If
+    
+    LogDebug "=== Conversion Complete ===", logFile
 End Sub
+
+' Headless wrapper function for command line execution
+' Based on SuperUser solution pattern
+Sub HeadlessBatch(FolderPath As String, Optional UseHfm As Variant)
+    Dim useHfmMode As Boolean : useHfmMode = True
+    If Not IsMissing(UseHfm) Then
+        If IsNumeric(UseHfm) Then useHfmMode = CBool(UseHfm)
+        If VarType(UseHfm) = vbBoolean Then useHfmMode = UseHfm
+    End If
+    
+    LogToFile "HeadlessBatch: Starting for " & FolderPath
+    
+    ' Get file count first
+    Dim fileCount As Long : fileCount = GetODTFiles(FolderPath)
+    LogToFile "HeadlessBatch: Found " & fileCount & " files"
+    
+    If fileCount > 0 Then
+        ' Get actual file list
+        Dim odtFiles : odtFiles = GetODTFileList(FolderPath)
+        
+        Dim Props(0) As New com.sun.star.beans.PropertyValue
+        Props(0).Name = "Hidden"
+        Props(0).Value = True
+        
+        Dim i As Long
+        For i = 0 To fileCount - 1
+            Dim filePath As String : filePath = odtFiles(i)
+            LogToFile "HeadlessBatch: Processing " & filePath
+            
+            Dim url As String : url = ConvertToURL(filePath)
+            Dim Document : Document = StarDesktop.loadComponentFromURL(url, "_blank", 0, Props)
+            
+            If Not IsEmpty(Document) Then
+                If useHfmMode Then
+                    MakeDocHfmView Document
+                Else
+                    MakeDocHtmlView Document
+                End If
+                Document.close(True)
+                LogToFile "HeadlessBatch: Completed " & filePath
+            Else
+                LogToFile "HeadlessBatch: Failed to load " & filePath
+            End If
+        Next
+    End If
+    
+    LogToFile "HeadlessBatch: Finished"
+End Sub
+
+' Robust file enumeration with multiple fallback methods
+Function GetODTFiles(ByRef folderPath As String) As Variant
+    Dim fileList() As String
+    Dim fileCount As Long : fileCount = 0
+    
+    LogDebug "GetODTFiles: Starting enumeration for " & folderPath
+    
+    On Error Resume Next
+    
+    ' Method 1: Try Dir$ function for .odt files
+    Dim fileName As String : fileName = Dir$(folderPath & GetPathSeparator() & "*.odt", 0)
+    LogDebug "GetODTFiles: Dir$ first .odt file = " & fileName
+    Do While fileName <> ""
+        ReDim Preserve fileList(fileCount)
+        fileList(fileCount) = folderPath & GetPathSeparator() & fileName
+        LogDebug "GetODTFiles: Added file " & fileList(fileCount)
+        fileCount = fileCount + 1
+        fileName = Dir$
+    Loop
+    
+    ' Also search for .fodt files
+    fileName = Dir$(folderPath & GetPathSeparator() & "*.fodt", 0)
+    LogDebug "GetODTFiles: Dir$ first .fodt file = " & fileName
+    Do While fileName <> ""
+        ReDim Preserve fileList(fileCount)
+        fileList(fileCount) = folderPath & GetPathSeparator() & fileName
+        LogDebug "GetODTFiles: Added file " & fileList(fileCount)
+        fileCount = fileCount + 1
+        fileName = Dir$
+    Loop
+    LogDebug "GetODTFiles: Dir$ method found " & fileCount & " files"
+    
+    ' Method 2: If Dir$ failed, try LibreOffice SimpleFileAccess
+    If fileCount = 0 Then
+        LogDebug "GetODTFiles: Trying SimpleFileAccess method"
+        Dim fileAccess : fileAccess = CreateUnoService("com.sun.star.ucb.SimpleFileAccess")
+        If Not IsEmpty(fileAccess) Then
+            Dim urlPath As String : urlPath = ConvertToURL(folderPath)
+            LogDebug "GetODTFiles: URL path = " & urlPath
+            If fileAccess.exists(urlPath) Then
+                Dim contents : contents = fileAccess.getFolderContents(urlPath, False)
+                LogDebug "GetODTFiles: Folder contents count = " & (UBound(contents) + 1)
+                Dim i As Long
+                For i = 0 To UBound(contents)
+                    Dim fileUrl As String : fileUrl = contents(i)
+                    If Right(LCase(fileUrl), 4) = ".odt" Or Right(LCase(fileUrl), 5) = ".fodt" Then
+                        ReDim Preserve fileList(fileCount)
+                        fileList(fileCount) = ConvertFromURL(fileUrl)
+                        LogDebug "GetODTFiles: SimpleFileAccess added " & fileList(fileCount)
+                        fileCount = fileCount + 1
+                    End If
+                Next
+            Else
+                LogDebug "GetODTFiles: Folder does not exist via SimpleFileAccess"
+            End If
+        Else
+            LogDebug "GetODTFiles: SimpleFileAccess service not available"
+        End If
+    End If
+    
+    On Error GoTo 0
+    
+    LogDebug "GetODTFiles: Total files found = " & fileCount
+    GetODTFiles = fileCount
+End Function
+
+' Get actual ODT file list array
+Function GetODTFileList(ByRef folderPath As String) As Variant
+    Dim fileList() As String
+    Dim fileCount As Long : fileCount = 0
+    
+    On Error Resume Next
+    
+    ' Method 1: Try Dir$ function for .odt files
+    Dim fileName As String : fileName = Dir$(folderPath & GetPathSeparator() & "*.odt", 0)
+    Do While fileName <> ""
+        ReDim Preserve fileList(fileCount)
+        fileList(fileCount) = folderPath & GetPathSeparator() & fileName
+        fileCount = fileCount + 1
+        fileName = Dir$
+    Loop
+    
+    ' Also search for .fodt files
+    fileName = Dir$(folderPath & GetPathSeparator() & "*.fodt", 0)
+    Do While fileName <> ""
+        ReDim Preserve fileList(fileCount)
+        fileList(fileCount) = folderPath & GetPathSeparator() & fileName
+        fileCount = fileCount + 1
+        fileName = Dir$
+    Loop
+    
+    ' Method 2: If Dir$ failed, try LibreOffice SimpleFileAccess
+    If fileCount = 0 Then
+        Dim fileAccess : fileAccess = CreateUnoService("com.sun.star.ucb.SimpleFileAccess")
+        If Not IsEmpty(fileAccess) Then
+            Dim urlPath As String : urlPath = ConvertToURL(folderPath)
+            If fileAccess.exists(urlPath) Then
+                Dim contents : contents = fileAccess.getFolderContents(urlPath, False)
+                Dim i As Long
+                For i = 0 To UBound(contents)
+                    Dim fileUrl As String : fileUrl = contents(i)
+                    If Right(LCase(fileUrl), 4) = ".odt" Or Right(LCase(fileUrl), 5) = ".fodt" Then
+                        ReDim Preserve fileList(fileCount)
+                        fileList(fileCount) = ConvertFromURL(fileUrl)
+                        fileCount = fileCount + 1
+                    End If
+                Next
+            End If
+        End If
+    End If
+    
+    On Error GoTo 0
+    GetODTFileList = fileList
+End Function
 

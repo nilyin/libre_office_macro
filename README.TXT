@@ -17,7 +17,7 @@ Author: Dmitry A. Borisov, ddaabb@mail.ru (CC BY 4.0)
 2. В LibreOffice Writer создаем и сохраняем файлы в формате .ODT
 с текстами, подготовленными в соответствии с описанием в статье 
 https://habr.com/ru/articles/769294/
-3. Копируем файлы в формате .ODT в папку, например, "D:\odt"
+3. Копируем файлы в формате .ODT в папку, например, "D:\odt" (!! я сделал кросплатформенный файл разделитель но под линукс макрос не работает для нескольких файлов в папке при вызове из CLI)
 4. Открываем cmd.exe и запускаем команду:
 "C:\Program Files\LibreOffice\program\soffice.exe" --invisible --nofirststartwizard --headless --norestore macro:///DocExport.DocModel.ExportDir("D:\odt",0)
 Комментарий:

@@ -1,4 +1,4 @@
-﻿REM Author: Dmitry A. Borisov, ddaabb@mail.ru (CC BY 4.0)
+REM Author: Dmitry A. Borisov, ddaabb@mail.ru (CC BY 4.0)
 Option Explicit
 Option Compatible
 Option ClassModule
@@ -24,9 +24,9 @@ Function PrintNodeStyle(ByRef node)
     ' Handle different style types
     If node.name_ = STYLE_QUOT Then
         s = viewAdapter.Quote(node)  ' Format as blockquote
-    ElseIf Left(node.name_, 5) = STYLE_CODE Then
+    ElseIf Len(node.name_) >= 5 And Left(node.name_, 5) = STYLE_CODE Then
         s = viewAdapter.Code(node)   ' Format as code block
-    ElseIf Left(node.name_, 7) = STYLE_HEAD Then
+    ElseIf Len(node.name_) >= 7 And Left(node.name_, 7) = STYLE_HEAD Then
         ' Process heading with potential bookmarks
         If node.children.Count > 0 Then
             Dim textPortion, enumPortion
@@ -177,9 +177,17 @@ Function PrintNodeTable(ByRef nodeTable)
         r = ""  ' Row content string
         ' Process each cell in the row
         For nCol = 0 To Colls
+            On Error Resume Next
             oCell = oTable.getCellByPosition(nCol, nRow)  ' Get cell object
-            oText = oCell.getText()  ' Get cell text object
-            c = ""  ' Cell content string
+            If Err.Number = 0 Then
+                On Error GoTo 0
+                oText = oCell.getText()  ' Get cell text object
+                c = ""  ' Cell content string
+            Else
+                On Error GoTo 0
+                c = ""  ' Skip merged/invalid cells
+                GoTo NextCell
+            End If
             
             ' Process all paragraphs in the cell
             oEnum = oText.createEnumeration()
@@ -189,6 +197,7 @@ Function PrintNodeTable(ByRef nodeTable)
                     c = c & PrintNodeParaLO(oPar, nodeTable.level + 3, 0)  ' Process cell paragraph
                 End If
             Loop
+NextCell:
             r = r & viewAdapter.FormatCell(c, nodeTable.level + 2, nCol, nRow)  ' Format cell
         Next
         t = t & viewAdapter.FormatRow(r, nodeTable.level + 1, nRow, Colls)  ' Format row
@@ -244,7 +253,10 @@ End Function
 ' @return: Prefix string for image names
 Private Function GenerateDocPrefix(ByRef docURL As String) As String
     Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), GetPathSeparator()) + 1)
-    fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
+    Dim dotPos As Long : dotPos = InStrRev(fileName, ".")
+    If dotPos > 1 Then
+        fileName = Left(fileName, dotPos - 1) ' Remove extension
+    End If
     
     ' Split by separators and take first 4 chars from each word
     Dim words : words = Split(Replace(Replace(fileName, "_", " "), "-", " "), " ")
@@ -259,17 +271,54 @@ Private Function GenerateDocPrefix(ByRef docURL As String) As String
             End If
         End If
     Next
-    If Len(prefix) > 0 Then prefix = Left(prefix, Len(prefix) - 1) ' Remove trailing underscore
+    If Len(prefix) > 1 Then prefix = Left(prefix, Len(prefix) - 1) ' Remove trailing underscore
     GenerateDocPrefix = prefix
 End Function
 
-' Generate image folder name from document URL
+' Generate image folder name from document URL with robust extraction
 ' @param docURL: Document URL
 ' @return: Image folder name with pattern "img_" + source filename
 Private Function GenerateImageFolderName(ByRef docURL As String) As String
-    Dim fileName As String : fileName = Mid(ConvertFromURL(docURL), InStrRev(ConvertFromURL(docURL), GetPathSeparator()) + 1)
-    fileName = Left(fileName, InStrRev(fileName, ".") - 1) ' Remove extension
+    On Error Resume Next
+    
+    ' Enhanced filename extraction with multiple fallback methods
+    Dim fileName As String
+    
+    ' Method 1: Standard ConvertFromURL
+    fileName = ConvertFromURL(docURL)
+    If fileName <> "" Then
+        fileName = Mid(fileName, InStrRev(fileName, GetPathSeparator()) + 1)
+    End If
+    
+    ' Method 2: Direct URL parsing if ConvertFromURL fails
+    If fileName = "" Then
+        fileName = docURL
+        If InStr(fileName, "/") > 0 Then
+            fileName = Mid(fileName, InStrRev(fileName, "/") + 1)
+        End If
+        If InStr(fileName, "\") > 0 Then
+            fileName = Mid(fileName, InStrRev(fileName, "\") + 1)
+        End If
+    End If
+    
+    ' Method 3: Extract from file:// URL format
+    If fileName = "" And Left(docURL, 7) = "file://" Then
+        fileName = Mid(docURL, 8)
+        fileName = Replace(fileName, "/", GetPathSeparator())
+        fileName = Mid(fileName, InStrRev(fileName, GetPathSeparator()) + 1)
+    End If
+    
+    ' Remove extension and create folder name
+    Dim dotPos As Long : dotPos = InStrRev(fileName, ".")
+    If dotPos > 1 Then
+        fileName = Left(fileName, dotPos - 1)
+    End If
+    
+    ' Fallback to generic name if all methods fail
+    If fileName = "" Then fileName = "document"
+    
     GenerateImageFolderName = "img_" & fileName
+    On Error GoTo 0
 End Function
 
 ' Extract and save image from LibreOffice graphic object
@@ -279,13 +328,18 @@ End Function
 ' @return: True if extraction successful
 Private Function ExtractImageFile(ByRef imageObj, ByRef targetDir As String, ByRef fileName As String, ByRef docURL As String) As Boolean
     On Error Resume Next
-    Dim fso : fso = CreateObject("Scripting.FileSystemObject")
     Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
     Dim imgDir As String : imgDir = targetDir & imgFolderName
     Dim targetPath As String : targetPath = imgDir & GetPathSeparator() & fileName
     
-    ' Create img directory if it doesn't exist
-    If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
+    LogDebug "ExtractImageFile: imgDir=" & imgDir & ", targetPath=" & targetPath
+    
+    ' Create img directory using enhanced method
+    If Not CreateDirectorySafe(imgDir) Then
+        LogDebug "ERROR: Failed to create directory: " & imgDir
+        ExtractImageFile = False
+        Exit Function
+    End If
     
     ' Try to get the graphic object and export it
     Dim graphic : graphic = imageObj.Graphic
@@ -303,8 +357,10 @@ Private Function ExtractImageFile(ByRef imageObj, ByRef targetDir As String, ByR
         ' Export the graphic
         graphicProvider.storeGraphic(graphic, exportProps())
         ExtractImageFile = (Err.Number = 0)
+        LogDebug "ExtractImageFile result: " & ExtractImageFile & ", Error: " & Err.Description
     Else
         ExtractImageFile = False
+        LogDebug "ERROR: Empty graphic object"
     End If
     On Error GoTo 0
 End Function
@@ -316,22 +372,41 @@ End Function
 ' @return: True if copy successful
 Private Function CopyImageFile(ByRef sourceURL As String, ByRef targetDir As String, ByRef fileName As String, ByRef docURL As String) As Boolean
     On Error Resume Next
-    Dim fso : fso = CreateObject("Scripting.FileSystemObject")
     Dim imgFolderName As String : imgFolderName = GenerateImageFolderName(docURL)
     Dim imgDir As String : imgDir = targetDir & imgFolderName
     Dim targetPath As String : targetPath = imgDir & GetPathSeparator() & fileName
     
-    ' Create img directory if it doesn't exist
-    If Not fso.FolderExists(imgDir) Then fso.CreateFolder(imgDir)
+    LogDebug "CopyImageFile: sourceURL=" & sourceURL & ", imgDir=" & imgDir
     
-    ' External file reference
+    ' Create img directory using enhanced method
+    If Not CreateDirectorySafe(imgDir) Then
+        LogDebug "ERROR: Failed to create directory: " & imgDir
+        CopyImageFile = False
+        Exit Function
+    End If
+    
+    ' Try multiple copy methods
     Dim sourcePath As String : sourcePath = ConvertFromURL(sourceURL)
-    If fso.FileExists(sourcePath) Then
+    
+    ' Method 1: Try FileSystemObject
+    Dim fso : fso = CreateObject("Scripting.FileSystemObject")
+    If Not IsEmpty(fso) And fso.FileExists(sourcePath) Then
         fso.CopyFile sourcePath, targetPath, True
         CopyImageFile = (Err.Number = 0)
-    Else
-        CopyImageFile = False
+        LogDebug "CopyImageFile FSO result: " & CopyImageFile
+        If CopyImageFile Then Exit Function
     End If
+    
+    ' Method 2: Try LibreOffice SimpleFileAccess
+    Dim fileAccess : fileAccess = CreateUnoService("com.sun.star.ucb.SimpleFileAccess")
+    If Not IsEmpty(fileAccess) Then
+        If fileAccess.exists(sourceURL) Then
+            fileAccess.copy(sourceURL, ConvertToURL(targetPath))
+            CopyImageFile = (Err.Number = 0)
+            LogDebug "CopyImageFile SimpleFileAccess result: " & CopyImageFile
+        End If
+    End If
+    
     On Error GoTo 0
 End Function
 

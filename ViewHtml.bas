@@ -88,7 +88,9 @@ End Function
 Function Link(ByRef node)
     Dim t As String : t = node.String
     If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
-        t = Left(t, Len(t) - 2)
+        If Len(t) > 2 Then
+            t = Left(t, Len(t) - 2)
+        End If
     End If
     Link = "<a href=""" & node.HyperLinkURL  & """ >" & t & "</a>"
 End Function

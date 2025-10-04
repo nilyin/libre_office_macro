@@ -174,7 +174,9 @@ Function Link(ByRef node)
     
     ' Remove trailing characters for heading styles
     If Left(node.ParaStyleName, 8) = STYLE_HEADING Then
-        t = Left(t, Len(t) - 2)
+        If Len(t) > 2 Then
+            t = Left(t, Len(t) - 2)
+        End If
     End If
     
     ' Convert LibreOffice internal references to GitHub-style markdown anchors
